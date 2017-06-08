@@ -82,7 +82,7 @@ float pulse_3_modifier = 1;
 float mapf(float x, float in_min, float in_max, float out_min, float out_max)
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-  }
+}
 
 uint8_t note_scheduler[4] = {0, 0, 0, 0};   // Note scheduling array
 
@@ -128,12 +128,6 @@ void setup() {
 
   vfd.clear();
 };
-
-/*
-
-  Main loop. Loopity loopity loop
-
-*/
 
 
 void loop() {
@@ -243,7 +237,7 @@ void loop() {
     };
     
     timer_0.end();
-      };
+  };
 };
 
 
@@ -278,13 +272,6 @@ void highGUI(){
   vfd.print(current_gui_channel);
 }
 
-
-
-/*
-
-  MIDI Functions for handling such bullcrap
-
-*/
 
 void HandleNoteOn(byte channel, byte pitch, byte velocity) {   // Callback
   if (velocity == 0) {
@@ -326,13 +313,6 @@ void ceaseNote(byte note_channel){
   };
 };
 
-
-
-/*
-
-  Timer Functions
-
-*/
 
 void setTimer(byte pitch, byte timer){
   int pp;
