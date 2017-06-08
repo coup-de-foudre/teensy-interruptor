@@ -59,13 +59,16 @@ LiquidCrystal vfd(3, 4, 5, 6, 7, 2);                // (RS, Enable, D4, D5, D6, 
 #define PULSEWIDTH_MIN 2
 #define PULSEWIDTH_MAX 300
 
+// 1 will have pulse readout in ms, 0 is hz
+#define READOUT_MS 1
+
 int clamp_pulse_width(float nominal_width) {
   return (int) constrain(nominal_width, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
 }
 
 #include "midi_constants.h"
 
-volatile uint32_t pulse_duty_cycle_setpoint          = 10000;
+volatile uint32_t pulse_duty_cycle_setpoint          = 10000; // NOTE(meawoppl) - units of microseconds?
 volatile uint32_t old_pulse_duty_cycle_setpoint      = 0;
 volatile uint16_t interrupter_pulsewidth_setpoint    = 100;
 volatile uint8_t  system_mode                        = 0;     // System Mode, 2 = USB, 1 = MIDI-RX, 0 = Clock
@@ -88,10 +91,6 @@ float mapf(float x, float in_min, float in_max, float out_min, float out_max)
 }
 
 uint8_t note_scheduler[4] = {0, 0, 0, 0};   // Note scheduling array
-
-/*
-    Setup / Init. This runs only once
-*/
 
 void setup() {
   /* Pullups, impedances etc */
@@ -199,17 +198,22 @@ void loop() {
       vfd.setCursor(8, 1);
       vfd.print("T:      ");
       vfd.setCursor(10, 1);
-      
-      vfd.print(pulse_duty_cycle_setpoint / 1000);
-      vfd.print("ms  ");
-      
-      
-      //vfd.print(( (float) 1 / ((float)(pulse_duty_cycle_setpoint / (float)1000000))  ));
-      //vfd.print("Hz   ");
+
+      // NOTE (meawoppl) - This changes the readout between ms and Hz
+      if (READOUT_MS) {
+        vfd.print(pulse_duty_cycle_setpoint / 1000);
+        vfd.print("ms  ");
+      } else {
+        vfd.print(( (float) 1 / ((float)(pulse_duty_cycle_setpoint / (float) 1000000))  ));
+        vfd.print("Hz   ");
+      }
       
       pulse_duty_cycle_setpoint = map(analogRead(duty_cycle_pot), 128, 0, 10000, 100000);
       
-      if( (old_pulse_duty_cycle_setpoint + 2000) < pulse_duty_cycle_setpoint || (old_pulse_duty_cycle_setpoint - 2000) > pulse_duty_cycle_setpoint ) {
+      // NOTE (meawoppl) - The intention of this code appears to be only updating 
+      // The duty cycle if it has changed by more than 2000 (ms?)
+      if( (old_pulse_duty_cycle_setpoint + 2000) < pulse_duty_cycle_setpoint || 
+          (old_pulse_duty_cycle_setpoint - 2000) > pulse_duty_cycle_setpoint ) {
         old_pulse_duty_cycle_setpoint = pulse_duty_cycle_setpoint;
         timer_0.end();
         delay(10);
@@ -220,8 +224,6 @@ void loop() {
     timer_0.end();
   };
 };
-
-
 
 void common() {
   // Read the potentiometers, and set the pulsewidth setpoint
