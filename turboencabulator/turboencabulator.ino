@@ -68,7 +68,7 @@ int clamp_pulse_width(float nominal_width) {
 
 #include "midi_constants.h"
 
-volatile uint32_t pulse_duty_cycle_setpoint          = 10000; // NOTE(meawoppl) - units of microseconds?
+volatile uint32_t pulse_duty_cycle_setpoint          = 10000; // NOTE(meawoppl) - units of microseconds? - NOTE(eranrund) - correct
 volatile uint32_t old_pulse_duty_cycle_setpoint      = 0;
 volatile uint16_t interrupter_pulsewidth_setpoint    = 100;
 volatile uint8_t  system_mode                        = 0;     // System Mode, 2 = USB, 1 = MIDI-RX, 0 = Clock
@@ -212,6 +212,9 @@ void loop() {
       
       // NOTE (meawoppl) - The intention of this code appears to be only updating 
       // The duty cycle if it has changed by more than 2000 (ms?)
+      // NOTE (eranrund) - microseconds, I believe, but yes, the purpose of th code
+      // is to only update it if it changed by more than 2000us. Reason for this is that
+      // the analog read is not stable and fluctuates.
       if( (old_pulse_duty_cycle_setpoint + 2000) < pulse_duty_cycle_setpoint || 
           (old_pulse_duty_cycle_setpoint - 2000) > pulse_duty_cycle_setpoint ) {
         old_pulse_duty_cycle_setpoint = pulse_duty_cycle_setpoint;
@@ -229,6 +232,8 @@ void common() {
   // Read the potentiometers, and set the pulsewidth setpoint
   // NOTE(meawoppl) - There is a brief time in which the pulsewidth
   // variable is set based on the input knob, but not constrained.  Dangerous.  
+  // NOTE(eranrund) - I don't think it's actually dangerous since this is only used inside the four pulse_ functions and
+  // inside those functions that value is clamped using clamp_pulse_width
   interrupter_pulsewidth_setpoint = map(analogRead(pulsewidth_pot), ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN);
   interrupter_pulsewidth_setpoint = constrain(interrupter_pulsewidth_setpoint, 0, PULSEWIDTH_MAX);
 
@@ -264,6 +269,12 @@ void HandleNoteOff(byte channel, byte pitch, byte velocity) {  // Callback
 // my impression was that channels were used to distinguish
 // instruments, but the current implementation of ceaseNote
 // will possibly disable any note sent on a certain channel?
+// NOTE(eranrund) - Channels should b used to distinguish between instruments
+// but indeed it doesn't look like that's the case here. I think for simplicity's
+// sake of not having to track which notes are currently being held Adam opted for
+// having multiple notes being on multiple channels. Not standard and definitely confusing,
+// haven't noticed it until now (which also means we never tried playing it in this mode
+// since a keyboard can't output notes this way). Nice catch...
 void playNote(byte pitch, byte note_channel) {
   pitch = constrain(pitch, NOTE_MIN, NOTE_MAX);
   
