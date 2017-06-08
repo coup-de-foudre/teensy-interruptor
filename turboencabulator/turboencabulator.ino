@@ -1,5 +1,4 @@
-]#include <MIDI.h>
-
+#include <MIDI.h>
 #include <LiquidCrystal.h>
 
 /* 4 Note Interrupter http://adammunich.com    */
@@ -60,6 +59,10 @@ LiquidCrystal vfd(3, 4, 5, 6, 7, 2);                // (RS, Enable, D4, D5, D6, 
 #define PULSEWIDTH_MIN 2
 #define PULSEWIDTH_MAX 300
 
+int clamp_pulse_width(float nominal_width) {
+  return (int) constrain(nominal_width, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
+}
+
 #include "midi_constants.h"
 
 volatile uint32_t pulse_duty_cycle_setpoint          = 10000;
@@ -92,21 +95,18 @@ uint8_t note_scheduler[4] = {0, 0, 0, 0};   // Note scheduling array
 
 void setup() {
   /* Pullups, impedances etc */
+  pinMode(channel_1_out,     OUTPUT);
+  pinMode(midi_mode_switch,  INPUT);
+  pinMode(pulse_mode_switch, INPUT);
+  pinMode(estop_switch,      INPUT_PULLUP);
 
-  pinMode(channel_1_out,         OUTPUT);
-  pinMode(midi_mode_switch,      INPUT);
-  pinMode(pulse_mode_switch,     INPUT);
-  pinMode(estop_switch,          INPUT_PULLUP);
-
-  pinMode(pulsewidth_pot, INPUT);
-  pinMode(duty_cycle_pot, INPUT);
+  pinMode(pulsewidth_pot,    INPUT);
+  pinMode(duty_cycle_pot,    INPUT);
 
   analogReadResolution(ADC_RESOLUTION);
   analogReadAveraging(128);
 
-
   /* Init Classes */
-
   usbMIDI.begin();
   usbMIDI.setHandleNoteOn(HandleNoteOn);
   usbMIDI.setHandleNoteOff(HandleNoteOff);
@@ -115,11 +115,10 @@ void setup() {
   MIDI.setHandleNoteOn(HandleNoteOn);
   MIDI.setHandleNoteOff(HandleNoteOff);
 
-  vfd.begin(2,20);
+  vfd.begin(2, 20);
   delay(2); // Give time for LCD to init
 
   /* Welcome Message */
-
   vfd.clear();
   vfd.setCursor(0,0);
   vfd.print("Turboencabulator");
@@ -129,97 +128,79 @@ void setup() {
   vfd.clear();
 };
 
+void init_mode(char* mode_name) {
+  killAllNotes();
+  vfd.clear();
+  vfd.setCursor(0, 0);
+  vfd.print(mode_name);
+  delay(100);
+}
+
+void act_on_estop() {
+  if(digitalReadFast(estop_switch) == 0)
+    killAllNotes();
+}
 
 void loop() {
   common();
 
+  // USB -> MIDI mode
+  if (system_mode == 2) {
+    init_mode("USB-MIDI")
+          
+    while (system_mode == 2) {
+      usbMIDI.read();
+      common();
 
-  /*
-      == USB Midi Mode ==
-    This mode will make the system behave as a USB midi device
-  */
+      vfd.setCursor(0, 1);
+      vfd.print("W:      ");
+      vfd.setCursor(2, 1);
+      vfd.print(interrupter_pulsewidth_setpoint);
+      vfd.write(0xE4);
+      vfd.print("s  ");
 
-  if(system_mode == 2){
-      killAllNotes();
-
-      vfd.clear();
-      vfd.setCursor(0,0);
-      vfd.print("USB-MIDI");
-      
-      /* end setup */
-      
-      while(system_mode == 2){
-	usbMIDI.read();
-	common();
-	
-	vfd.setCursor(0,1);
-	vfd.print("W:      ");
-	vfd.setCursor(2,1);
-	vfd.print(interrupter_pulsewidth_setpoint);
-	vfd.write(0xE4);
-	vfd.print("s  ");
-	
-	if(digitalReadFast(estop_switch) == 0) killAllNotes();
-      };
+      act_on_estop();
+    };
   };
-  
 
-  /*
-    == MIDI Input Mode ==
-
-  This mode will make the system behave as an actual MIDI reciever (for guitars and shit)
-  */
-
-  if(system_mode == 1){     // MIDI-RX mode
-    killAllNotes();
-
-    vfd.clear();
-    vfd.setCursor(0,0);
-    vfd.print("MIDI-RX");
+  // MIDI Input Mode
+  if (system_mode == 1){
+    init_mode("MIDI-RX");
     
-    /* end setup */
-
-    while(system_mode == 1){
+    while (system_mode == 1) {
       MIDI.read();
       common();
       
-      vfd.setCursor(0,1);
+      vfd.setCursor(0, 1);
       vfd.print("W:      ");
-      vfd.setCursor(2,1);
+      vfd.setCursor(2, 1);
       vfd.print(interrupter_pulsewidth_setpoint);
       vfd.write(0xE4);
       vfd.print("s  ");
-      
-      if(digitalReadFast(estop_switch) == 0) killAllNotes();
+
+      act_on_estop();
     };
   };
   
-
-  if(system_mode == 0){     // Pulse clock mode
-    killAllNotes();
+  // Pulse clock mode
+  if (system_mode == 0) {
+    init_mode("PULSE");
     
-    vfd.clear();
-    vfd.setCursor(0,0);
-    vfd.print("PULSE");
-    delay(100);
-
-    /* end setup */
-    
-    while(system_mode == 0){
+    while (system_mode == 0) {
       common();
       
-      vfd.setCursor(0,1);
+      vfd.setCursor(0, 1);
       vfd.print("W:      ");
-      vfd.setCursor(2,1);
+      vfd.setCursor(2, 1);
       vfd.print(interrupter_pulsewidth_setpoint);
       vfd.write(0xE4);
       vfd.print("s  ");
       
-      vfd.setCursor(8,1);
+      vfd.setCursor(8, 1);
       vfd.print("T:      ");
-      vfd.setCursor(10,1);
+      vfd.setCursor(10, 1);
       
-      vfd.print(pulse_duty_cycle_setpoint/1000);
+      vfd.print(pulse_duty_cycle_setpoint / 1000);
       vfd.print("ms  ");
       
       
@@ -228,11 +209,11 @@ void loop() {
       
       pulse_duty_cycle_setpoint = map(analogRead(duty_cycle_pot), 128, 0, 10000, 100000);
       
-      if((old_pulse_duty_cycle_setpoint + 2000) < pulse_duty_cycle_setpoint || (old_pulse_duty_cycle_setpoint - 2000) > pulse_duty_cycle_setpoint ){
-	old_pulse_duty_cycle_setpoint = pulse_duty_cycle_setpoint;
-	timer_0.end();
-	delay(10);
-	timer_0.begin(pulse_0, pulse_duty_cycle_setpoint);
+      if( (old_pulse_duty_cycle_setpoint + 2000) < pulse_duty_cycle_setpoint || (old_pulse_duty_cycle_setpoint - 2000) > pulse_duty_cycle_setpoint ) {
+        old_pulse_duty_cycle_setpoint = pulse_duty_cycle_setpoint;
+        timer_0.end();
+        delay(10);
+        timer_0.begin(pulse_0, pulse_duty_cycle_setpoint);
       };
     };
     
@@ -242,38 +223,28 @@ void loop() {
 
 
 
-void common(){
+void common() {
+  // Read the potentiometers, and set the pulsewidth setpoint
+  // NOTE(meawoppl) - There is a brief time in which the pulsewidth
+  // variable is set based on the input knob, but not constrained.  Dangerous.  
   interrupter_pulsewidth_setpoint = map(analogRead(pulsewidth_pot), ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN);
   interrupter_pulsewidth_setpoint = constrain(interrupter_pulsewidth_setpoint, 0, PULSEWIDTH_MAX);
 
+  // Read the input switches, and set the global system_mode var
   uint8_t midi_mode_state  = digitalReadFast(midi_mode_switch);
   uint8_t pulse_mode_state = digitalReadFast(pulse_mode_switch);
   
-  if(midi_mode_state == 1){
-      system_mode = 2;
-  }
-  
-  else if(pulse_mode_state == 1){
-      system_mode = 0;
-  }
-  
-  else{  // Otherwise... MIDI-RX mode
+  if (midi_mode_state == 1) {
+    system_mode = 2;
+  } else if (pulse_mode_state == 1) {
+    system_mode = 0;
+  } else {
     system_mode = 1;
   };
 };
 
-
-void highGUI(){
-  int current_gui_channel = 0;  // Tesla coil channel
-  int current_gui_mode = 0;  // GUI mode;
-  
-  vfd.setCursor(10, 0);
-  vfd.print("Coil ");
-  vfd.print(current_gui_channel);
-}
-
-
-void HandleNoteOn(byte channel, byte pitch, byte velocity) {   // Callback
+// Callback from MIDI.h
+void HandleNoteOn(byte channel, byte pitch, byte velocity) {
   if (velocity == 0) {
     ceaseNote(channel);
   } else {
@@ -281,40 +252,42 @@ void HandleNoteOn(byte channel, byte pitch, byte velocity) {   // Callback
   };
 };
 
-
+// Callback from MIDI.h
 void HandleNoteOff(byte channel, byte pitch, byte velocity) {  // Callback
   ceaseNote(channel);
 };
 
-
-void playNote(byte pitch, byte note_channel){
-
+// NOTE(meawoppl) - I am not sure what the semantics
+// are for multiple notes with the same channel here
+// my impression was that channels were used to distinguish
+// instruments, but the current implementation of ceaseNote
+// will possibly disable any note sent on a certain channel?
+void playNote(byte pitch, byte note_channel) {
   pitch = constrain(pitch, NOTE_MIN, NOTE_MAX);
   
   for(byte i = 0; i < 4; i++){
-    if(note_scheduler[i] != 0) continue;
-          //otherwise...
+    if(note_scheduler[i] != 0)
+      continue;
     
     note_scheduler[i] = note_channel;
     setTimer(pitch, i);
-    i = 100; // mission accomplished, now gtfo
+    break;
   };
 };
 
-
-void ceaseNote(byte note_channel){
+void ceaseNote(byte note_channel) {
   for(byte i = 0; i < 4; i++){
-    if(note_scheduler[i] != note_channel) continue;
-    //otherwise...
+    if(note_scheduler[i] != note_channel)
+      continue;
     
     note_scheduler[i] = 0;
     killTimer(i);
-    i = 100; // mission accomplished, now gtfo
+    break;
   };
 };
 
 
-void setTimer(byte pitch, byte timer){
+void setTimer(byte pitch, byte timer) {
   int pp;
 
   switch(timer){
@@ -338,52 +311,47 @@ void setTimer(byte pitch, byte timer){
 };
 
 
-void killTimer(byte timer){
-  switch(timer){
-  case 0: timer_0.end(); break;
-  case 1: timer_1.end(); break;
-  case 2: timer_2.end(); break;
-  case 3: timer_3.end(); break;
+void killTimer(byte timer) {
+  switch(timer) {
+    case 0: timer_0.end(); break;
+    case 1: timer_1.end(); break;
+    case 2: timer_2.end(); break;
+    case 3: timer_3.end(); break;
   };
 };
 
 
-void killAllNotes(){
-  for(byte i = 0; i < 4; i++){
+void killAllNotes() {
+  for(byte i = 0; i < 4; i++) {
     note_scheduler[i] = 0;
     killTimer(i);
   };
 };
 
-void pulse_0(){
+void pulse_0() {
   digitalWriteFast(channel_1_out, HIGH);
-  int delay_us = (int) ((float)interrupter_pulsewidth_setpoint * pulse_0_modifier);
-  delay_us     = constrain(delay_us, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
-  delayMicroseconds( delay_us );
+  int delay_us = clamp_pulse_width(interrupter_pulsewidth_setpoint * pulse_0_modifier);
+  delayMicroseconds(delay_us);
   digitalWriteFast(channel_1_out, LOW);
 };
 
-void pulse_1(){
+void pulse_1() {
   digitalWriteFast(channel_1_out, HIGH);
-  int delay_us = (int) ((float)interrupter_pulsewidth_setpoint * pulse_1_modifier);
-  delay_us     = constrain(delay_us, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
-  delayMicroseconds( delay_us );
+  int delay_us = clamp_pulse_width(interrupter_pulsewidth_setpoint * pulse_1_modifier);
+  delayMicroseconds(delay_us);
   digitalWriteFast(channel_1_out, LOW);
 };
 
-void pulse_2(){
+void pulse_2() {
   digitalWriteFast(channel_1_out, HIGH);
-  int delay_us = (int) ((float)interrupter_pulsewidth_setpoint * pulse_2_modifier);
-  delay_us     = constrain(delay_us, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
-  delayMicroseconds( delay_us );
+  int delay_us = clamp_pulse_width(interrupter_pulsewidth_setpoint * pulse_2_modifier);
+  delayMicroseconds(delay_us);
   digitalWriteFast(channel_1_out, LOW);
 };
 
-void pulse_3(){
+void pulse_3() {
   digitalWriteFast(channel_1_out, HIGH);
-  int delay_us = (int) ((float)interrupter_pulsewidth_setpoint * pulse_3_modifier);
-  delay_us     = constrain(delay_us, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
-  delayMicroseconds( delay_us );
+  int delay_us = clamp_pulse_width(interrupter_pulsewidth_setpoint * pulse_3_modifier);
+  delayMicroseconds(delay_us);
   digitalWriteFast(channel_1_out, LOW);
 };
-
