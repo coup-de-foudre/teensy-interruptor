@@ -1,4 +1,4 @@
-#include <MIDI.h>
+]#include <MIDI.h>
 
 #include <LiquidCrystal.h>
 
@@ -45,12 +45,12 @@ Optoisolated Midi RX -> D0 (See http://bit.ly/2a6BQgA )
 
 
 IntervalTimer timer_0, timer_1, timer_2, timer_3;
-LiquidCrystal vfd(3, 4, 5, 6, 7, 8);                // (RS, Enable, D4, D5, D6, D7)
+LiquidCrystal vfd(3, 4, 5, 6, 7, 2);                // (RS, Enable, D4, D5, D6, D7)
 
 #define midi_mode_switch    10
 #define pulse_mode_switch   9
 #define estop_switch        11
-#define channel_1_out       21
+#define channel_1_out       23
 #define pulsewidth_pot A0
 #define duty_cycle_pot A1
 
