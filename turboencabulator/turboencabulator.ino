@@ -106,7 +106,7 @@ void setup() {
   analogReadResolution(ADC_RESOLUTION);
   analogReadAveraging(128);
 
-  /* Init Classes */
+  /* Init  the midi watchers/callbacks */
   usbMIDI.begin();
   usbMIDI.setHandleNoteOn(HandleNoteOn);
   usbMIDI.setHandleNoteOff(HandleNoteOff);
@@ -121,9 +121,14 @@ void setup() {
   /* Welcome Message */
   vfd.clear();
   vfd.setCursor(0,0);
-  vfd.print("Turboencabulator");
+  vfd.print("Coup De Foudre");
 
-  delay(1500); // Do nothing
+  delay(1500);
+
+  vfd.setCursor(0,0);
+  vfd.clear();
+  vfd.print("Version 1.0.0");
+  delay(2000);
 
   vfd.clear();
 };
@@ -141,13 +146,35 @@ void act_on_estop() {
     killAllNotes();
 }
 
+unsigned long last_display_millis = 0;
 void update_bottom_display_line() {
+  // Debounce the call rate of this function to avoid flicker
+  if ((millis() - last_display_millis) < 250)
+    return;
+
   vfd.setCursor(0, 1);
   vfd.print("W:      ");
   vfd.setCursor(2, 1);
   vfd.print(interrupter_pulsewidth_setpoint);
   vfd.write(0xE4);
   vfd.print("s  ");
+
+  if (system_mode == 0) {
+      vfd.setCursor(8, 1);
+      vfd.print("T:      ");
+      vfd.setCursor(10, 1);
+
+      // NOTE (meawoppl) - This changes the readout between ms and Hz
+      if (READOUT_MS) {
+        vfd.print(pulse_duty_cycle_setpoint / 1000);
+        vfd.print("ms  ");
+      } else {
+        vfd.print(( (float) 1 / ((float)(pulse_duty_cycle_setpoint / (float) 1000000))  ));
+        vfd.print("Hz   ");
+      }
+  }
+
+  last_display_millis = millis();
 }
 
 void midi_runloop() {
@@ -161,7 +188,7 @@ void loop() {
 
   // USB -> MIDI mode
   if (system_mode == 2) {
-    init_mode("USB-MIDI");
+    init_mode("MIDI Mode (USB)");
           
     while (system_mode == 2) {
       usbMIDI.read();
@@ -171,7 +198,7 @@ void loop() {
 
   // MIDI Input Mode
   if (system_mode == 1) {
-    init_mode("MIDI-RX");
+    init_mode("MIDI Mode (PORT)");
     
     while (system_mode == 1) {
       MIDI.read();
@@ -188,23 +215,7 @@ void loop() {
 
       update_bottom_display_line();      
 
-      vfd.setCursor(8, 1);
-      vfd.print("T:      ");
-      vfd.setCursor(10, 1);
-
-      // NOTE (meawoppl) - This changes the readout between ms and Hz
-      if (READOUT_MS) {
-        vfd.print(pulse_duty_cycle_setpoint / 1000);
-        vfd.print("ms  ");
-      } else {
-        vfd.print(( (float) 1 / ((float)(pulse_duty_cycle_setpoint / (float) 1000000))  ));
-        vfd.print("Hz   ");
-      }
-      
-      pulse_duty_cycle_setpoint = map(analogRead(duty_cycle_pot), 128, 0, 10000, 100000);
-      
-      // NOTE (meawoppl) - The intention of this code appears to be only updating 
-      // The duty cycle if it has changed by more than 2000 (ms?)
+      // NOTE (meawoppl) - The knob readout is a bit noisy, so this if-block ignores dither
       if( (old_pulse_duty_cycle_setpoint + 2000) < pulse_duty_cycle_setpoint || 
           (old_pulse_duty_cycle_setpoint - 2000) > pulse_duty_cycle_setpoint ) {
         old_pulse_duty_cycle_setpoint = pulse_duty_cycle_setpoint;
@@ -219,11 +230,13 @@ void loop() {
 };
 
 void common() {
-  // Read the potentiometers, and set the pulsewidth setpoint
-  // NOTE(meawoppl) - There is a brief time in which the pulsewidth
-  // variable is set based on the input knob, but not constrained.  Dangerous.  
-  interrupter_pulsewidth_setpoint = map(analogRead(pulsewidth_pot), ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN);
-  interrupter_pulsewidth_setpoint = constrain(interrupter_pulsewidth_setpoint, 0, PULSEWIDTH_MAX);
+  // Read the potentiometers, and set the pulse width setpoint
+  interrupter_pulsewidth_setpoint = constrain(
+    map(analogRead(pulsewidth_pot), ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN),
+    0, PULSEWIDTH_MAX);
+
+  // Read the duty cycle setpoint (for pulse mode)
+  pulse_duty_cycle_setpoint = map(analogRead(duty_cycle_pot), 128, 0, 10000, 100000);
 
   // Read the input switches, and set the global system_mode var
   uint8_t midi_mode_state  = digitalReadFast(midi_mode_switch);
@@ -283,8 +296,6 @@ void ceaseNote(byte note_channel) {
 
 
 void setTimer(byte pitch, byte timer) {
-  int pp;
-
   switch(timer){
     case 0:
       pulse_0_modifier = mapf(pitch, NOTE_MIN, NOTE_MAX, MODIFIER_MAX, MODIFIER_MIN);
