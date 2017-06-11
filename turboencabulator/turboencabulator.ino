@@ -168,7 +168,7 @@ void loop() {
   
   // Pulse clock mode
   if (system_mode == 0) {
-    init_mode("PULSE");
+    init_mode("Pulse Mode");
     
     while (system_mode == 0) {
       read_controls();
@@ -224,11 +224,6 @@ void HandleNoteOff(byte channel, byte pitch, byte velocity) {  // Callback
   ceaseNote(channel);
 };
 
-// NOTE(meawoppl) - I am not sure what the semantics
-// are for multiple notes with the same channel here
-// my impression was that channels were used to distinguish
-// instruments, but the current implementation of ceaseNote
-// will possibly disable any note sent on a certain channel?
 void playNote(byte pitch, byte note_channel) {
   pitch = constrain(pitch, NOTE_MIN, NOTE_MAX);
   
