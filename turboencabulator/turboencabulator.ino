@@ -1,5 +1,4 @@
 #include <MIDI.h>
-#include <LiquidCrystal.h>
 
 /* 4 Note Interrupter http://adammunich.com    */
 /* Run sketch at 96MHz on a teensy 3.1 or 3.2  */
@@ -44,7 +43,6 @@ Optoisolated Midi RX -> D0 (See http://bit.ly/2a6BQgA )
 
 
 IntervalTimer timer_0, timer_1, timer_2, timer_3;
-LiquidCrystal vfd(3, 4, 5, 6, 7, 2);                // (RS, Enable, D4, D5, D6, D7)
 
 #define midi_mode_switch    10
 #define pulse_mode_switch   9
@@ -66,12 +64,13 @@ int clamp_pulse_width(float nominal_width) {
   return (int) constrain(nominal_width, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
 }
 
-#include "midi_constants.h"
-
 volatile uint32_t pulse_duty_cycle_setpoint          = 10000; // NOTE(meawoppl) - units of microseconds?
 volatile uint32_t old_pulse_duty_cycle_setpoint      = 0;
 volatile uint16_t interrupter_pulsewidth_setpoint    = 100;
 volatile uint8_t  system_mode                        = 0;     // System Mode, 2 = USB, 1 = MIDI-RX, 0 = Clock
+
+#include "midi_constants.h"
+#include "display.h"
 
 const uint8_t  ADC_RESOLUTION = 7;
 const uint16_t ANALOG_SCALE_MAX = pow(2, ADC_RESOLUTION) - 2;
@@ -115,26 +114,18 @@ void setup() {
   MIDI.setHandleNoteOn(HandleNoteOn);
   MIDI.setHandleNoteOff(HandleNoteOff);
 
-  vfd.begin(2, 20);
-  delay(2); // Give time for LCD to init
+  init_display();
 
   /* Welcome Message */
-  vfd.clear();
-  vfd.setCursor(0,0);
-  vfd.print("Coup De Foudre");
-
+  update_top_display_line("Coup De Foudre");
   delay(1500);
-
-  vfd.setCursor(0,0);
-  vfd.clear();
-  vfd.print("Version 1.0.0");
+  update_top_display_line("Version 1.0.0 ");
   delay(2000);
-
-  vfd.clear();
 };
 
+
 void init_mode(char* mode_name) {
-  killAllNotes();
+  kill_all_notes();
   vfd.clear();
   vfd.setCursor(0, 0);
   vfd.print(mode_name);
@@ -143,48 +134,17 @@ void init_mode(char* mode_name) {
 
 void act_on_estop() {
   if(digitalReadFast(estop_switch) == 0)
-    killAllNotes();
-}
-
-unsigned long last_display_millis = 0;
-void update_bottom_display_line() {
-  // Debounce the call rate of this function to avoid flicker
-  if ((millis() - last_display_millis) < 250)
-    return;
-
-  vfd.setCursor(0, 1);
-  vfd.print("W:      ");
-  vfd.setCursor(2, 1);
-  vfd.print(interrupter_pulsewidth_setpoint);
-  vfd.write(0xE4);
-  vfd.print("s  ");
-
-  if (system_mode == 0) {
-      vfd.setCursor(8, 1);
-      vfd.print("T:      ");
-      vfd.setCursor(10, 1);
-
-      // NOTE (meawoppl) - This changes the readout between ms and Hz
-      if (READOUT_MS) {
-        vfd.print(pulse_duty_cycle_setpoint / 1000);
-        vfd.print("ms  ");
-      } else {
-        vfd.print(( (float) 1 / ((float)(pulse_duty_cycle_setpoint / (float) 1000000))  ));
-        vfd.print("Hz   ");
-      }
-  }
-
-  last_display_millis = millis();
+    kill_all_notes();
 }
 
 void midi_runloop() {
-  common();
+  read_controls();
   update_bottom_display_line();
   act_on_estop();
 }
 
 void loop() {
-  common();
+  read_controls();
 
   // USB -> MIDI mode
   if (system_mode == 2) {
@@ -211,11 +171,10 @@ void loop() {
     init_mode("PULSE");
     
     while (system_mode == 0) {
-      common();
-
+      read_controls();
       update_bottom_display_line();      
 
-      // NOTE (meawoppl) - The knob readout is a bit noisy, so this if-block ignores dither
+      // NOTE (meawoppl) - The knob readout is noisy, so only ack large changes
       if( (old_pulse_duty_cycle_setpoint + 2000) < pulse_duty_cycle_setpoint || 
           (old_pulse_duty_cycle_setpoint - 2000) > pulse_duty_cycle_setpoint ) {
         old_pulse_duty_cycle_setpoint = pulse_duty_cycle_setpoint;
@@ -229,7 +188,7 @@ void loop() {
   };
 };
 
-void common() {
+void read_controls() {
   // Read the potentiometers, and set the pulse width setpoint
   interrupter_pulsewidth_setpoint = constrain(
     map(analogRead(pulsewidth_pot), ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN),
@@ -289,7 +248,7 @@ void ceaseNote(byte note_channel) {
       continue;
     
     note_scheduler[i] = 0;
-    killTimer(i);
+    kill_timer(i);
     break;
   };
 };
@@ -317,7 +276,7 @@ void setTimer(byte pitch, byte timer) {
 };
 
 
-void killTimer(byte timer) {
+void kill_timer(byte timer) {
   switch(timer) {
     case 0: timer_0.end(); break;
     case 1: timer_1.end(); break;
@@ -327,10 +286,10 @@ void killTimer(byte timer) {
 };
 
 
-void killAllNotes() {
+void kill_all_notes() {
   for(byte i = 0; i < 4; i++) {
     note_scheduler[i] = 0;
-    killTimer(i);
+    kill_timer(i);
   };
 };
 
