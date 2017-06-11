@@ -85,6 +85,7 @@ float pulse_1_modifier = 1;
 float pulse_2_modifier = 1;
 float pulse_3_modifier = 1;
 
+
 float mapf(float x, float in_min, float in_max, float out_min, float out_max)
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
@@ -140,44 +141,39 @@ void act_on_estop() {
     killAllNotes();
 }
 
+void midi_runloop() {
+  common();
+
+  vfd.setCursor(0, 1);
+  vfd.print("W:      ");
+  vfd.setCursor(2, 1);
+  vfd.print(interrupter_pulsewidth_setpoint);
+  vfd.write(0xE4);
+  vfd.print("s  ");
+
+  act_on_estop();
+}
+
 void loop() {
   common();
 
   // USB -> MIDI mode
   if (system_mode == 2) {
-    init_mode("USB-MIDI")
+    init_mode("USB-MIDI");
           
     while (system_mode == 2) {
       usbMIDI.read();
-      common();
-
-      vfd.setCursor(0, 1);
-      vfd.print("W:      ");
-      vfd.setCursor(2, 1);
-      vfd.print(interrupter_pulsewidth_setpoint);
-      vfd.write(0xE4);
-      vfd.print("s  ");
-
-      act_on_estop();
+      midi_runloop();
     };
   };
 
   // MIDI Input Mode
-  if (system_mode == 1){
+  if (system_mode == 1) {
     init_mode("MIDI-RX");
     
     while (system_mode == 1) {
       MIDI.read();
-      common();
-      
-      vfd.setCursor(0, 1);
-      vfd.print("W:      ");
-      vfd.setCursor(2, 1);
-      vfd.print(interrupter_pulsewidth_setpoint);
-      vfd.write(0xE4);
-      vfd.print("s  ");
-
-      act_on_estop();
+      midi_runloop();
     };
   };
   
