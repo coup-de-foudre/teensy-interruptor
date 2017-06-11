@@ -141,16 +141,18 @@ void act_on_estop() {
     killAllNotes();
 }
 
-void midi_runloop() {
-  common();
-
+void update_bottom_display_line() {
   vfd.setCursor(0, 1);
   vfd.print("W:      ");
   vfd.setCursor(2, 1);
   vfd.print(interrupter_pulsewidth_setpoint);
   vfd.write(0xE4);
   vfd.print("s  ");
+}
 
+void midi_runloop() {
+  common();
+  update_bottom_display_line();
   act_on_estop();
 }
 
@@ -183,14 +185,9 @@ void loop() {
     
     while (system_mode == 0) {
       common();
-      
-      vfd.setCursor(0, 1);
-      vfd.print("W:      ");
-      vfd.setCursor(2, 1);
-      vfd.print(interrupter_pulsewidth_setpoint);
-      vfd.write(0xE4);
-      vfd.print("s  ");
-      
+
+      update_bottom_display_line();      
+
       vfd.setCursor(8, 1);
       vfd.print("T:      ");
       vfd.setCursor(10, 1);
