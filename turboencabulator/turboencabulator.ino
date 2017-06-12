@@ -43,12 +43,7 @@ Optoisolated Midi RX -> D0 (See http://bit.ly/2a6BQgA )
 
 
 // Allocate all the teensy timers, put them in an array
-IntervalTimer[4] timer_array;
 IntervalTimer timer_0, timer_1, timer_2, timer_3;
-timer_array[0] = timer_0;
-timer_array[1] = timer_1;
-timer_array[2] = timer_2;
-timer_array[3] = timer_3;
 
 float pulse_mod_array[4] = {1, 1, 1, 1};
 float pulse_0_modifier = 1;
@@ -241,7 +236,7 @@ void playNote(byte pitch, byte note_channel) {
       continue;
     
     note_scheduler[i] = note_channel;
-    setTimer(pitch, i);
+    setup_note(pitch, i);
     break;
   };
 };
@@ -252,20 +247,22 @@ void ceaseNote(byte note_channel) {
       continue;
     
     note_scheduler[i] = 0;
-    kill_timer(i);
+    stop_timer(i);
     break;
   };
 };
 
 
-void setTimer(byte pitch, byte timer_number) {
+void setup_note(byte pitch, byte timer_number) {
+  //
   pitch = constrain(pitch, NOTE_MIN, NOTE_MAX);
   pulse_mod_array[timer_number] = mapf(pitch, NOTE_MIN, NOTE_MAX, MODIFIER_MAX, MODIFIER_MIN);
-  start_timer(timer_number, midi_period_us[pitch])
+  start_timer(timer_number, midi_period_us[pitch]);
 };
 
 void start_timer(byte timer_number, uint32_t period_us) {
-  switch(timer) {
+  // Start timer 'timer_number' to trigger every 'period_us' microseconds
+  switch(timer_number) {
     case 0: timer_0.begin(pulse_0, period_us); break;
     case 1: timer_1.begin(pulse_1, period_us); break;
     case 2: timer_2.begin(pulse_2, period_us); break;
@@ -273,8 +270,8 @@ void start_timer(byte timer_number, uint32_t period_us) {
   };
 }
 
-void kill_timer(byte timer) {
-  switch(timer) {
+void stop_timer(byte timer_number) {
+  switch(timer_number) {
     case 0: timer_0.end(); break;
     case 1: timer_1.end(); break;
     case 2: timer_2.end(); break;
@@ -286,7 +283,7 @@ void kill_timer(byte timer) {
 void kill_all_notes() {
   for(byte i = 0; i < 4; i++) {
     note_scheduler[i] = 0;
-    kill_timer(i);
+    stop_timer(i);
   };
 };
 
