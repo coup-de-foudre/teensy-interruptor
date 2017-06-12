@@ -1,5 +1,8 @@
 #include <LiquidCrystal.h>
 
+// 1 will have pulse readout in ms, 0 is hz
+#define READOUT_MS 0
+
 LiquidCrystal vfd(3, 4, 5, 6, 7, 2);                // (RS, Enable, D4, D5, D6, D7)
 
 void init_display(){

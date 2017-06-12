@@ -42,7 +42,20 @@ Optoisolated Midi RX -> D0 (See http://bit.ly/2a6BQgA )
 */
 
 
+// Allocate all the teensy timers, put them in an array
+IntervalTimer[4] timer_array;
 IntervalTimer timer_0, timer_1, timer_2, timer_3;
+timer_array[0] = timer_0;
+timer_array[1] = timer_1;
+timer_array[2] = timer_2;
+timer_array[3] = timer_3;
+
+float pulse_mod_array[4] = {1, 1, 1, 1};
+float pulse_0_modifier = 1;
+float pulse_1_modifier = 1;
+float pulse_2_modifier = 1;
+float pulse_3_modifier = 1;
+
 
 #define midi_mode_switch    10
 #define pulse_mode_switch   9
@@ -56,9 +69,6 @@ IntervalTimer timer_0, timer_1, timer_2, timer_3;
 #define NOTE_MAX 108
 #define PULSEWIDTH_MIN 2
 #define PULSEWIDTH_MAX 300
-
-// 1 will have pulse readout in ms, 0 is hz
-#define READOUT_MS 1
 
 int clamp_pulse_width(float nominal_width) {
   return (int) constrain(nominal_width, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
@@ -78,12 +88,6 @@ const uint8_t  ANALOG_SCALE_MIN = 0;
 
 const float  MODIFIER_MAX = 1;
 const float  MODIFIER_MIN = midi_freq[NOTE_MIN] / midi_freq[NOTE_MAX];
-
-float pulse_0_modifier = 1;
-float pulse_1_modifier = 1;
-float pulse_2_modifier = 1;
-float pulse_3_modifier = 1;
-
 
 float mapf(float x, float in_min, float in_max, float out_min, float out_max)
 {
@@ -149,7 +153,7 @@ void loop() {
   // USB -> MIDI mode
   if (system_mode == 2) {
     init_mode("MIDI Mode (USB)");
-          
+
     while (system_mode == 2) {
       usbMIDI.read();
       midi_runloop();
@@ -212,6 +216,9 @@ void read_controls() {
 
 // Callback from MIDI.h
 void HandleNoteOn(byte channel, byte pitch, byte velocity) {
+  if (channel >= 4)
+    return;
+
   if (velocity == 0) {
     ceaseNote(channel);
   } else {
@@ -220,12 +227,14 @@ void HandleNoteOn(byte channel, byte pitch, byte velocity) {
 };
 
 // Callback from MIDI.h
-void HandleNoteOff(byte channel, byte pitch, byte velocity) {  // Callback
+void HandleNoteOff(byte channel, byte pitch, byte velocity) {
+  if (channel >= 4)
+    return;
+
   ceaseNote(channel);
 };
 
 void playNote(byte pitch, byte note_channel) {
-  pitch = constrain(pitch, NOTE_MIN, NOTE_MAX);
   
   for(byte i = 0; i < 4; i++){
     if(note_scheduler[i] != 0)
@@ -249,27 +258,20 @@ void ceaseNote(byte note_channel) {
 };
 
 
-void setTimer(byte pitch, byte timer) {
-  switch(timer){
-    case 0:
-      pulse_0_modifier = mapf(pitch, NOTE_MIN, NOTE_MAX, MODIFIER_MAX, MODIFIER_MIN);
-      timer_0.begin(pulse_0, midi_period_us[pitch]);
-      break;
-    case 1:
-      pulse_1_modifier = mapf(pitch, NOTE_MIN, NOTE_MAX, MODIFIER_MAX, MODIFIER_MIN);
-      timer_1.begin(pulse_1, midi_period_us[pitch]);
-      break;
-    case 2:
-      pulse_2_modifier = mapf(pitch, NOTE_MIN, NOTE_MAX, MODIFIER_MAX, MODIFIER_MIN);
-      timer_2.begin(pulse_2, midi_period_us[pitch]);
-      break;
-    case 3:
-      pulse_3_modifier = mapf(pitch, NOTE_MIN, NOTE_MAX, MODIFIER_MAX, MODIFIER_MIN);
-      timer_3.begin(pulse_3, midi_period_us[pitch]);
-      break;
-  };
+void setTimer(byte pitch, byte timer_number) {
+  pitch = constrain(pitch, NOTE_MIN, NOTE_MAX);
+  pulse_mod_array[timer_number] = mapf(pitch, NOTE_MIN, NOTE_MAX, MODIFIER_MAX, MODIFIER_MIN);
+  start_timer(timer_number, midi_period_us[pitch])
 };
 
+void start_timer(byte timer_number, uint32_t period_us) {
+  switch(timer) {
+    case 0: timer_0.begin(pulse_0, period_us); break;
+    case 1: timer_1.begin(pulse_1, period_us); break;
+    case 2: timer_2.begin(pulse_2, period_us); break;
+    case 3: timer_3.begin(pulse_3, period_us); break;
+  };
+}
 
 void kill_timer(byte timer) {
   switch(timer) {

@@ -1,6 +1,7 @@
 uint32_t _rng_state = millis()
 
-uint32_t tiny_prng() {
+// Roughly: https://en.wikipedia.org/wiki/Xorshift
+inline uint32_t tiny_prng() {
 	uint32_t x = _rng_state;
 	x ^= x << 13;
 	x ^= x >> 17;
