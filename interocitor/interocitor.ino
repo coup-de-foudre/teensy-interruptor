@@ -55,14 +55,17 @@ float pulse_3_modifier = 1;
 #define midi_mode_switch    10
 #define pulse_mode_switch   9
 #define estop_switch        11
+
 #define channel_1_out       23
+#define channel_2_out       22 
+
 #define pulsewidth_pot A0
 #define duty_cycle_pot A1
 
 // 88 Key keyboard CONSTANTS ------------------
 #define NOTE_MIN 21
 #define NOTE_MAX 108
-#define PULSEWIDTH_MIN 2
+#define PULSEWIDTH_MIN 35
 #define PULSEWIDTH_MAX 300
 
 int clamp_pulse_width(float nominal_width) {
@@ -90,9 +93,19 @@ float mapf(float x, float in_min, float in_max, float out_min, float out_max)
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+void debug_thing(int thing) {
+  vfd.setCursor(0, 0);
+  vfd.print("        ");
+  vfd.setCursor(0, 0);
+  vfd.print("V: ");
+  vfd.print(thing);
+}
+
 void setup() {
   /* Pullups, impedances etc */
   pinMode(channel_1_out,     OUTPUT);
+  pinMode(channel_2_out,     OUTPUT);
+ 
   pinMode(midi_mode_switch,  INPUT);
   pinMode(pulse_mode_switch, INPUT);
   pinMode(estop_switch,      INPUT_PULLUP);
@@ -218,45 +231,81 @@ void read_controls() {
 // index is 1:1 with timer
 // contents store the velocity
 // Storage of 255 indicates an EMPTY SLOT
+uint8_t note_channel[TIMER_COUNT] = {0, 0, 0, 0};
 uint8_t note_pitch[TIMER_COUNT] = {255, 255, 255, 255};
 uint8_t note_velocity[TIMER_COUNT] = {0, 0, 0, 0};
 
 // Callback from MIDI.h
 void HandleNoteOn(byte channel, byte pitch, byte velocity) {
-  if (channel != MY_CHANNEL)
+  if ((channel != 1) && (channel != 2))
     return;
 
+  debug_thing(channel);
+
   if (velocity == 0) {
-    stop_note(pitch);
+    stop_note(pitch, channel);
   } else {
-    play_note(pitch, velocity);
+    play_note(pitch, velocity, channel);
   };
 };
 
 // Callback from MIDI.h
 void HandleNoteOff(byte channel, byte pitch, byte velocity) {
-  if (channel != MY_CHANNEL)
+  if ((channel != 1) && (channel != 2))
     return;
 
-  stop_note(pitch);
+  stop_note(pitch, channel);
 };
 
-void play_note(byte pitch, byte velocity) {
+void play_note(byte pitch, byte velocity, byte channel) {
   // if we find a timer free, start a note with pitch/velocity specified
-  for(byte i = 0; i < TIMER_COUNT; i++){
+  byte start, end;
+  switch (channel) {
+    case 1:
+      start = 0;
+      end = 2;
+      break;
+
+    case 2:
+      start = 2;
+      end = 4;
+      break;
+
+    default:
+      return;
+  }
+
+  for(byte i = start; i < end; i++) {
     if(note_pitch[i] != 255)
       continue;
-    
+
     note_pitch[i] = pitch;
     note_velocity[i] = velocity;
+    note_channel[i] = channel;
     setup_note(pitch, i);
     break;
   };
 };
 
-void stop_note(byte pitch) {
+void stop_note(byte pitch, byte channel) {
   // Stop _all_ notes with the specified pitch
-  for(byte i = 0; i < TIMER_COUNT; i++){
+  byte start, end;
+  switch (channel) {
+    case 1:
+      start = 0;
+      end = 2;
+      break;
+
+    case 2:
+      start = 2;
+      end = 4;
+      break;
+
+    default:
+      return;
+  }
+
+  for(byte i = start; i < end; i++) {
     if(note_pitch[i] != pitch)
       continue;
     
@@ -302,7 +351,8 @@ void kill_all_notes() {
 };
 
 inline uint32_t velocity_to_pulse_length(uint8_t velo) {
-  return map(velo, 1, 127, PULSEWIDTH_MIN, PULSEWIDTH_MAX) + (((int8_t) random_unit8() - 128) / 8);
+  // uint8_t random_component = random_unit8() / 128;
+  return map(velo, 1, 127, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
 }
 
 
@@ -331,13 +381,13 @@ void pulse_1() {
 };
 
 void pulse_2() {
-  digitalWriteFast(channel_1_out, HIGH);
+  digitalWriteFast(channel_2_out, HIGH);
   delay_safe_micros(velocity_to_pulse_length(note_velocity[2]));
-  digitalWriteFast(channel_1_out, LOW);
+  digitalWriteFast(channel_2_out, LOW);
 };
 
 void pulse_3() {
-  digitalWriteFast(channel_1_out, HIGH);
+  digitalWriteFast(channel_2_out, HIGH);
   delay_safe_micros(velocity_to_pulse_length(note_velocity[3]));
-  digitalWriteFast(channel_1_out, LOW);
+  digitalWriteFast(channel_2_out, LOW);
 };
