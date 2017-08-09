@@ -56,8 +56,10 @@ float pulse_3_modifier = 1;
 #define pulse_mode_switch   9
 #define estop_switch        11
 
-#define channel_1_out       23
+#define channel_1_out       21
 #define channel_2_out       22 
+#define channel_3_out       23 
+
 
 #define pulsewidth_pot A0
 #define duty_cycle_pot A1
@@ -105,6 +107,8 @@ void setup() {
   /* Pullups, impedances etc */
   pinMode(channel_1_out,     OUTPUT);
   pinMode(channel_2_out,     OUTPUT);
+  pinMode(channel_3_out,     OUTPUT);
+
  
   pinMode(midi_mode_switch,  INPUT);
   pinMode(pulse_mode_switch, INPUT);
@@ -363,7 +367,7 @@ void delay_safe_micros(uint32_t micros) {
 // For the pulsed (tick) mode
 void pulse_static() {
   digitalWriteFast(channel_1_out, HIGH);
-  delay_safe_micros(velocity_to_pulse_length(64));
+  delay_safe_micros(interrupter_pulsewidth_setpoint);
   digitalWriteFast(channel_1_out, LOW);
 }
 
