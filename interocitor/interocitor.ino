@@ -218,7 +218,6 @@ void loop() {
     init_mode("Pulse Mode");
     
     while (system_mode == 0) {
-      act_on_estop()
       read_controls();
       update_bottom_display_line();      
 
@@ -237,7 +236,6 @@ void loop() {
     init_mode("Pink Noise");
     int delay_time;
     while (system_mode == 4) {
-      act_on_estop()
       read_controls();
       update_bottom_display_line();
 
@@ -253,6 +251,8 @@ void loop() {
 };
 
 void read_controls() {
+  act_on_estop();
+
   // Read the potentiometers, and set the pulse width setpoint
   interrupter_pulsewidth_setpoint = constrain(
     map(analogRead(pulsewidth_pot), ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN),
