@@ -167,9 +167,11 @@ void act_on_estop() {
 
     digitalWriteFast(channel_1_out, LOW);
     digitalWriteFast(channel_2_out, LOW);
-    
+    vfd.setCursor(0, 0);
+    vfd.print("      ESTOP     ");
     // Require HW reboot to exit
     while(true) {};
+
   }
 }
 
@@ -216,6 +218,7 @@ void loop() {
     init_mode("Pulse Mode");
     
     while (system_mode == 0) {
+      act_on_estop()
       read_controls();
       update_bottom_display_line();      
 
@@ -234,6 +237,7 @@ void loop() {
     init_mode("Pink Noise");
     int delay_time;
     while (system_mode == 4) {
+      act_on_estop()
       read_controls();
       update_bottom_display_line();
 
