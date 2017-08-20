@@ -1,4 +1,5 @@
 #include <MIDI.h>
+MIDI_CREATE_DEFAULT_INSTANCE();
 
 /* 4 Note Interrupter http://adammunich.com    */
 /* Run sketch at 96MHz on a teensy 3.1 or 3.2  */
@@ -288,7 +289,7 @@ void play_note(byte pitch, byte velocity, byte channel) {
 };
 
 void stop_note(byte pitch, byte channel) {
-  // Stop _all_ notes with the specified pitch
+  // Stop _all notes with the specified pitch
   byte start, end;
   switch (channel) {
     case 1:

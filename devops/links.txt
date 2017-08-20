@@ -1,0 +1,9 @@
+Arduino IDE 1.8.2:
+https://www.arduino.cc/download_handler.php?f=/arduino-1.8.2-linux64.tar.xz
+
+Teensy Add In (1.37):
+https://www.pjrc.com/teensy/td_137/TeensyduinoInstall.linux64
+
+Install udev rules from this folder:
+sudo cp 49-teensy.rules /etc/udev/rules.d/
+
