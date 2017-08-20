@@ -27,13 +27,13 @@ void update_bottom_display_line() {
     return;
 
   vfd.setCursor(0, 1);
-  vfd.print("W:      ");
-  vfd.setCursor(2, 1);
+  vfd.print("      ");
+  vfd.setCursor(0, 1);
   vfd.print(interrupter_pulsewidth_setpoint);
-  vfd.write(0xE4);
+  vfd.write(0xE4); // <- mu
   vfd.print("s  ");
 
-  if (system_mode == 0) {
+  if ((system_mode == 0) or (system_mode == 4)) {
       vfd.setCursor(8, 1);
       vfd.print("T:      ");
       vfd.setCursor(10, 1);
@@ -46,6 +46,17 @@ void update_bottom_display_line() {
         vfd.print(( (float) 1 / ((float)(pulse_duty_cycle_setpoint / (float) 1000000))  ));
         vfd.print("Hz   ");
       }
+  }
+
+  if ((system_mode == 1) or (system_mode == 2)) {
+      vfd.setCursor(8, 1);
+      for(byte i = 0; i < 4; i++) {
+        if (note_velocity[i] == 0) {
+          vfd.print("  ");
+        } else {
+          vfd.print(note_name[note_pitch[i] % 12]);
+        }
+    };    
   }
 
   last_display_millis = millis();

@@ -78,6 +78,20 @@ volatile uint32_t old_pulse_duty_cycle_setpoint      = 0;
 volatile uint16_t interrupter_pulsewidth_setpoint    = 100;
 volatile uint8_t  system_mode                        = 0;     // System Mode, 2 = USB, 1 = MIDI-RX, 0 = Clock
 
+// In the below set of callbacks, we map the triple (c, p, v)
+// to an individual timer keyed on p.  This way multiple notes
+// with the same pitch won't take multiple timer slots
+#define MY_CHANNEL 1
+#define TIMER_COUNT 4
+
+// Note scheduling array,
+// index is 1:1 with timer
+// contents store the velocity
+// Storage of 255 indicates an EMPTY SLOT
+uint8_t note_channel[TIMER_COUNT] = {0, 0, 0, 0};
+uint8_t note_pitch[TIMER_COUNT] = {255, 255, 255, 255};
+uint8_t note_velocity[TIMER_COUNT] = {0, 0, 0, 0};
+
 #include "midi_constants.h"
 #include "display.h"
 #include "entropy.h"
@@ -94,6 +108,9 @@ float mapf(float x, float in_min, float in_max, float out_min, float out_max)
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+// Enable the below to get a jankey vis of what midi notes
+// are coming into the system
+// #define DEBUGMIDI
 void debug_thing(int thing) {
   vfd.setCursor(0, 0);
   vfd.print("        ");
@@ -131,7 +148,7 @@ void setup() {
   /* Welcome Message */
   update_top_display_line("Coup De Foudre");
   delay(1500);
-  update_top_display_line("Version 1.0.0 ");
+  update_top_display_line("Version 1.1.0 ");
   delay(2000);
 };
 
@@ -145,14 +162,30 @@ void init_mode(char* mode_name) {
 }
 
 void act_on_estop() {
-  if(digitalReadFast(estop_switch) == 0)
+  if(digitalReadFast(estop_switch) == 0) {
     kill_all_notes();
+
+    digitalWriteFast(channel_1_out, LOW);
+    digitalWriteFast(channel_2_out, LOW);
+    
+    // Require HW reboot to exit
+    while(true) {};
+  }
 }
 
 void midi_runloop() {
   read_controls();
   update_bottom_display_line();
   act_on_estop();
+}
+
+bool update_pulse_duty_cycle() {
+  if( (old_pulse_duty_cycle_setpoint + 5) < pulse_duty_cycle_setpoint || 
+      (old_pulse_duty_cycle_setpoint - 5) > pulse_duty_cycle_setpoint ) {
+    old_pulse_duty_cycle_setpoint = pulse_duty_cycle_setpoint;
+    return true;
+  }
+  return false;
 }
 
 void loop() {
@@ -187,9 +220,7 @@ void loop() {
       update_bottom_display_line();      
 
       // NOTE (meawoppl) - The knob readout is noisy, so only ack large changes
-      if( (old_pulse_duty_cycle_setpoint + 2000) < pulse_duty_cycle_setpoint || 
-          (old_pulse_duty_cycle_setpoint - 2000) > pulse_duty_cycle_setpoint ) {
-        old_pulse_duty_cycle_setpoint = pulse_duty_cycle_setpoint;
+      if(update_pulse_duty_cycle()) {
         timer_0.end();
         delay(10);
         timer_0.begin(pulse_static, pulse_duty_cycle_setpoint);
@@ -197,6 +228,23 @@ void loop() {
     };
     
     timer_0.end();
+  };
+
+  if (system_mode == 4) {
+    init_mode("Pink Noise");
+    int delay_time;
+    while (system_mode == 4) {
+      read_controls();
+      update_bottom_display_line();
+
+      digitalWriteFast(channel_1_out, HIGH);
+      delay_safe_micros(interrupter_pulsewidth_setpoint);
+      digitalWriteFast(channel_1_out, LOW);
+
+      // Ensure that we ring-down for at least 2x that time
+      delay_time = map(random_unit8(), 0, 256, interrupter_pulsewidth_setpoint * 2, pulse_duty_cycle_setpoint * 2);
+      delayMicroseconds(delay_time);
+    };
   };
 };
 
@@ -206,42 +254,42 @@ void read_controls() {
     map(analogRead(pulsewidth_pot), ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN),
     0, PULSEWIDTH_MAX);
 
-  // Read the duty cycle setpoint (for pulse mode)
-  pulse_duty_cycle_setpoint = map(analogRead(duty_cycle_pot), 128, 0, 10000, 100000);
+  // Time between pulses in microseconds
+  pulse_duty_cycle_setpoint = map(analogRead(duty_cycle_pot), 128, 0, 1000, 100000);
 
   // Read the input switches, and set the global system_mode var
-  uint8_t midi_mode_state  = digitalReadFast(midi_mode_switch);
-  uint8_t pulse_mode_state = digitalReadFast(pulse_mode_switch);
+  uint8_t midi_vs_pulse  = digitalReadFast(midi_mode_switch);
+  uint8_t sub_setting = digitalReadFast(pulse_mode_switch);
   
-  if (midi_mode_state == 1) {
+  if ((midi_vs_pulse == 1) and (sub_setting == 0)) {
+    // MIDI USB
     system_mode = 2;
-  } else if (pulse_mode_state == 1) {
-    system_mode = 0;
-  } else {
+  } 
+  else if ((midi_vs_pulse == 1) and (sub_setting == 1))
+  { 
+    // MIDI Jack
     system_mode = 1;
+  }
+  else if ((midi_vs_pulse == 0) and (sub_setting == 0))
+  {
+    // Fixed Pulse mode
+    system_mode = 0;
+  }
+  else if ((midi_vs_pulse == 0) and (sub_setting == 1)) 
+  {
+    // Static noise mode
+    system_mode = 4;
   };
 };
-
-// In the below set of callbacks, we map the triple (c, p, v)
-// to an individual timer keyed on p.  This way multiple notes
-// with the same pitch won't take multiple timer slots
-#define MY_CHANNEL 1
-#define TIMER_COUNT 4
-
-// Note scheduling array,
-// index is 1:1 with timer
-// contents store the velocity
-// Storage of 255 indicates an EMPTY SLOT
-uint8_t note_channel[TIMER_COUNT] = {0, 0, 0, 0};
-uint8_t note_pitch[TIMER_COUNT] = {255, 255, 255, 255};
-uint8_t note_velocity[TIMER_COUNT] = {0, 0, 0, 0};
 
 // Callback from MIDI.h
 void HandleNoteOn(byte channel, byte pitch, byte velocity) {
   if ((channel != 1) && (channel != 2))
     return;
 
+  #ifdef DEBUGMIDI
   debug_thing(channel);
+  #endif
 
   if (velocity == 0) {
     stop_note(pitch, channel);
@@ -382,13 +430,13 @@ void pulse_1() {
 };
 
 void pulse_2() {
-  digitalWriteFast(channel_2_out, HIGH);
+  digitalWriteFast(channel_1_out, HIGH);
   delay_safe_micros(velocity_to_pulse_length(note_velocity[2]));
-  digitalWriteFast(channel_2_out, LOW);
+  digitalWriteFast(channel_1_out, LOW);
 };
 
 void pulse_3() {
-  digitalWriteFast(channel_2_out, HIGH);
+  digitalWriteFast(channel_1_out, HIGH);
   delay_safe_micros(velocity_to_pulse_length(note_velocity[3]));
-  digitalWriteFast(channel_2_out, LOW);
+  digitalWriteFast(channel_1_out, LOW);
 };
