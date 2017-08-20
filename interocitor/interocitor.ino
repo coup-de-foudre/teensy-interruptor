@@ -215,7 +215,7 @@ void loop() {
   
   // Pulse clock mode
   if (system_mode == 0) {
-    init_mode("Pulse Mode");
+    init_mode("Fixed Freq.");
     
     while (system_mode == 0) {
       read_controls();
@@ -244,6 +244,7 @@ void loop() {
       digitalWriteFast(channel_1_out, LOW);
 
       // Ensure that we ring-down for at least 2x that time
+      // Linear approximation to Poisson arrival time
       delay_time = map(random_unit8(), 0, 256, interrupter_pulsewidth_setpoint * 2, pulse_duty_cycle_setpoint * 2);
       delayMicroseconds(delay_time);
     };

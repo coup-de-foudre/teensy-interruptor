@@ -31,12 +31,12 @@ void update_bottom_display_line() {
   vfd.setCursor(0, 1);
   vfd.print(interrupter_pulsewidth_setpoint);
   vfd.write(0xE4); // <- mu
-  vfd.print("s  ");
+  vfd.print("s ");
 
   if ((system_mode == 0) or (system_mode == 4)) {
+      vfd.setCursor(6, 1);
+      vfd.print("          ");
       vfd.setCursor(8, 1);
-      vfd.print("T:      ");
-      vfd.setCursor(10, 1);
 
       // NOTE (meawoppl) - This changes the readout between ms and Hz
       if (READOUT_MS) {
