@@ -57,7 +57,7 @@ float pulse_3_modifier = 1;
 #define pulse_mode_switch   9
 #define estop_switch        11
 
-#define channel_1_out       23
+#define channel_1_out       22
 #define channel_2_out       22 
 
 #define pulsewidth_pot A0
@@ -67,7 +67,7 @@ float pulse_3_modifier = 1;
 #define NOTE_MIN 21
 #define NOTE_MAX 108
 #define PULSEWIDTH_MIN 35
-#define PULSEWIDTH_MAX 300
+#define PULSEWIDTH_MAX 250
 
 int clamp_pulse_width(float nominal_width) {
   return (int) constrain(nominal_width, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
@@ -182,8 +182,8 @@ void midi_runloop() {
 }
 
 bool update_pulse_duty_cycle() {
-  if( (old_pulse_duty_cycle_setpoint + 5) < pulse_duty_cycle_setpoint || 
-      (old_pulse_duty_cycle_setpoint - 5) > pulse_duty_cycle_setpoint ) {
+  if( (old_pulse_duty_cycle_setpoint + 50) < pulse_duty_cycle_setpoint || 
+      (old_pulse_duty_cycle_setpoint - 50) > pulse_duty_cycle_setpoint ) {
     old_pulse_duty_cycle_setpoint = pulse_duty_cycle_setpoint;
     return true;
   }
@@ -238,6 +238,7 @@ void loop() {
     while (system_mode == 4) {
       read_controls();
       update_bottom_display_line();
+      update_pulse_duty_cycle();
 
       digitalWriteFast(channel_1_out, HIGH);
       delay_safe_micros(interrupter_pulsewidth_setpoint);
@@ -417,7 +418,7 @@ void delay_safe_micros(uint32_t micros) {
 // For the pulsed (tick) mode
 void pulse_static() {
   digitalWriteFast(channel_1_out, HIGH);
-  delay_safe_micros(velocity_to_pulse_length(64));
+  delay_safe_micros(interrupter_pulsewidth_setpoint);
   digitalWriteFast(channel_1_out, LOW);
 }
 
