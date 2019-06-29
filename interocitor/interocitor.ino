@@ -53,7 +53,6 @@ float pulse_1_modifier = 1;
 float pulse_2_modifier = 1;
 float pulse_3_modifier = 1;
 
-
 #define midi_mode_switch    10
 #define pulse_mode_switch   9
 #define estop_switch        11
@@ -71,14 +70,14 @@ float pulse_3_modifier = 1;
 #define VERSION "1.2.3"
 
 // Values for bipolar/theophany
-#define COILNAME "Theophany"
-#define PULSEWIDTH_MIN 5
-#define PULSEWIDTH_MAX 100
+// #define COILNAME "Cfg: Theophany"
+// #define PULSEWIDTH_MIN 5
+// #define PULSEWIDTH_MAX 100
 
 // Values for Orage and 2014 coil 
-// #define COILNAME "Orage"
-// #define PULSEWIDTH_MIN 35
-// #define PULSEWIDTH_MAX 250
+#define COILNAME "Cfg: Orage"
+#define PULSEWIDTH_MIN 35
+#define PULSEWIDTH_MAX 250
 
 int clamp_pulse_width(float nominal_width) {
   return (int) constrain(nominal_width, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
