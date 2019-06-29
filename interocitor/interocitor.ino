@@ -1,6 +1,7 @@
 #include <MIDI.h>
 MIDI_CREATE_DEFAULT_INSTANCE();
 
+/* Coup De Foudre - Adapted heavily from       */
 /* 4 Note Interrupter http://adammunich.com    */
 /* Run sketch at 96MHz on a teensy 3.1 or 3.2  */
 
@@ -60,14 +61,24 @@ float pulse_3_modifier = 1;
 #define channel_1_out       22
 #define channel_2_out       22 
 
-#define pulsewidth_pot A0
-#define duty_cycle_pot A1
+#define pulsewidth_pot A1
+#define duty_cycle_pot A0
 
 // 88 Key keyboard CONSTANTS ------------------
 #define NOTE_MIN 21
 #define NOTE_MAX 108
-#define PULSEWIDTH_MIN 35
-#define PULSEWIDTH_MAX 250
+
+#define VERSION "1.2.3"
+
+// Values for bipolar/theophany
+#define COILNAME "Theophany"
+#define PULSEWIDTH_MIN 5
+#define PULSEWIDTH_MAX 100
+
+// Values for Orage and 2014 coil 
+// #define COILNAME "Orage"
+// #define PULSEWIDTH_MIN 35
+// #define PULSEWIDTH_MAX 250
 
 int clamp_pulse_width(float nominal_width) {
   return (int) constrain(nominal_width, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
@@ -147,9 +158,13 @@ void setup() {
 
   /* Welcome Message */
   update_top_display_line("Coup De Foudre");
-  delay(1500);
-  update_top_display_line("Version 1.1.0 ");
-  delay(2000);
+  delay(1000);
+
+  update_top_display_line(COILNAME);
+  delay(1000);
+
+  update_top_display_line(VERSION);
+  delay(1000);
 };
 
 

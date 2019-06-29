@@ -15,6 +15,9 @@ void init_display(){
 
 void update_top_display_line(char * contents) {
   vfd.setCursor(0,0);
+  vfd.print("                "); // Blank the line
+  
+  vfd.setCursor(0,0);
   vfd.print(contents);
 }
 

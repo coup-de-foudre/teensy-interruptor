@@ -1,5 +1,7 @@
 uint32_t _rng_state = millis();
 
+#define RNG_MAGIC 75380540
+
 // Roughly: https://en.wikipedia.org/wiki/Xorshift
 inline void _permute_rng_state() {
 	uint32_t x = _rng_state;
@@ -10,7 +12,7 @@ inline void _permute_rng_state() {
 }
 
 void init_rng() {
-  _rng_state = 75380540 - millis();
+  _rng_state = RNG_MAGIC - millis();
   for (int i=0; i<101; i++)
 	_permute_rng_state();
 }
