@@ -328,21 +328,25 @@ void HandleNoteOff(byte channel, byte pitch, byte velocity) {
 
 void play_note(byte pitch, byte velocity, byte channel) {
   // if we find a timer free, start a note with pitch/velocity specified
-  byte start, end;
-  switch (channel) {
-    case 1:
-      start = 0;
-      end = 2;
-      break;
+  byte start = 0;
+  byte end = 4;
 
-    case 2:
-      start = 2;
-      end = 4;
-      break;
+  // NOTE(MattyG) Comment this block in to bifurcate channels/outputs  
+  // SEE BELOW
+  // switch (channel) {
+  //   case 1:
+  //     start = 0;
+  //     end = 2;
+  //     break;
 
-    default:
-      return;
-  }
+  //   case 2:
+  //     start = 2;
+  //     end = 4;
+  //     break;
+
+  //   default:
+  //     return;
+  // }
 
   for(byte i = start; i < end; i++) {
     if(note_pitch[i] != 255)
@@ -358,21 +362,27 @@ void play_note(byte pitch, byte velocity, byte channel) {
 
 void stop_note(byte pitch, byte channel) {
   // Stop _all notes with the specified pitch
-  byte start, end;
-  switch (channel) {
-    case 1:
-      start = 0;
-      end = 2;
-      break;
+  
+  
+  byte start = 0;
+  byte end = 4;
 
-    case 2:
-      start = 2;
-      end = 4;
-      break;
+  // NOTE(MattyG) Comment this block in to bifurcate channels/outputs 
+  // SEE ABOVE
+  // switch (channel) {
+  //   case 1:
+  //     start = 0;
+  //     end = 2;
+  //     break;
 
-    default:
-      return;
-  }
+  //   case 2:
+  //     start = 2;
+  //     end = 4;
+  //     break;
+
+  //   default:
+  //     return;
+  // }
 
   for(byte i = start; i < end; i++) {
     if(note_pitch[i] != pitch)
