@@ -362,8 +362,6 @@ void play_note(byte pitch, byte velocity, byte channel) {
 
 void stop_note(byte pitch, byte channel) {
   // Stop _all notes with the specified pitch
-  
-  
   byte start = 0;
   byte end = 4;
 
