@@ -2,6 +2,7 @@
 
 // 1 will have pulse readout in ms, 0 is hz
 #define READOUT_MS 0
+#define DEBUG_BEND false
 
 LiquidCrystal vfd(3, 4, 5, 6, 7, 2);                // (RS, Enable, D4, D5, D6, D7)
 
@@ -29,16 +30,19 @@ void update_bottom_display_line() {
     return;
 
   vfd.setCursor(0, 1);
-  
-  vfd.print("       ");
-  vfd.setCursor(2, 1);
-  vfd.print(bent_value_cents);
-  // vfd.print("W<     ");
-  // vfd.setCursor(2, 1);
-  // vfd.print(interrupter_pulsewidth_setpoint);
-  // vfd.write(0xE4); // <- mu
-  // vfd.print("s ");
 
+  if(DEBUG_BEND){  
+    vfd.print("       ");
+    vfd.setCursor(2, 1);
+    vfd.print(bent_value_cents);
+  } else {
+    vfd.print("W<     ");
+    vfd.setCursor(2, 1);
+    vfd.print(interrupter_pulsewidth_setpoint);
+    vfd.write(0xE4); // <- mu
+    vfd.print("s ");
+  }
+  
   if ((system_mode == 0) or (system_mode == 4)) {
       vfd.setCursor(7, 1);
       vfd.print("          ");

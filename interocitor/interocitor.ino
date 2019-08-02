@@ -67,7 +67,7 @@ float pulse_3_modifier = 1;
 #define NOTE_MIN 21
 #define NOTE_MAX 108
 
-#define VERSION "1.2.3"
+#define VERSION "2.0.0"
 
 // Values for bipolar/theophany
 #define COILNAME "Cfg: Theophany"
