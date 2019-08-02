@@ -31,7 +31,7 @@ void update_bottom_display_line() {
   vfd.setCursor(0, 1);
   vfd.print("      ");
   vfd.setCursor(0, 1);
-  vfd.print(pulse_period);
+  vfd.print(interrupter_pulsewidth_setpoint);
   vfd.write(0xE4); // <- mu
   vfd.print("s ");
 
@@ -42,7 +42,7 @@ void update_bottom_display_line() {
 
       // NOTE (meawoppl) - This changes the readout between ms and Hz
       if (READOUT_MS) {
-        vfd.print(pulse_period / 1000);
+        vfd.print(pulse_period   / 1000);
         vfd.print("ms  ");
       } else {
         vfd.print(( (float) 1 / ((float)(pulse_period / (float) 1000000))  ));

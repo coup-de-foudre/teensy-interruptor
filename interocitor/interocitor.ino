@@ -273,7 +273,7 @@ void read_controls() {
   // This includes mapping the potentiometer values to the pulsewidth
   // as well as clamping the possible outputs
   int pulsewidth_raw = analogRead(pulsewidth_pot);
-  interrupter_pulsew  idth_setpoint = constrain(
+  interrupter_pulsewidth_setpoint = constrain(
     map(pulsewidth_raw, ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN),
       0, PULSEWIDTH_MAX);
 
