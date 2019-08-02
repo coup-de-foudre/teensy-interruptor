@@ -21,7 +21,6 @@ void update_top_display_line(char * contents) {
   vfd.print(contents);
 }
 
-
 unsigned long last_display_millis = 0;
 
 void update_bottom_display_line() {
@@ -32,7 +31,7 @@ void update_bottom_display_line() {
   vfd.setCursor(0, 1);
   vfd.print("      ");
   vfd.setCursor(0, 1);
-  vfd.print(interrupter_pulsewidth_setpoint);
+  vfd.print(pulse_period);
   vfd.write(0xE4); // <- mu
   vfd.print("s ");
 
@@ -43,10 +42,10 @@ void update_bottom_display_line() {
 
       // NOTE (meawoppl) - This changes the readout between ms and Hz
       if (READOUT_MS) {
-        vfd.print(pulse_duty_cycle_setpoint / 1000);
+        vfd.print(pulse_period / 1000);
         vfd.print("ms  ");
       } else {
-        vfd.print(( (float) 1 / ((float)(pulse_duty_cycle_setpoint / (float) 1000000))  ));
+        vfd.print(( (float) 1 / ((float)(pulse_period / (float) 1000000))  ));
         vfd.print("Hz   ");
       }
   }

@@ -334,23 +334,6 @@ void play_note(byte pitch, byte velocity, byte channel) {
   byte start = 0;
   byte end = 4;
 
-  // NOTE(MattyG) Comment this block in to bifurcate channels/outputs  
-  // SEE BELOW
-  // switch (channel) {
-  //   case 1:
-  //     start = 0;
-  //     end = 2;
-  //     break;
-
-  //   case 2:
-  //     start = 2;
-  //     end = 4;
-  //     break;
-
-  //   default:
-  //     return;
-  // }
-
   for(byte i = start; i < end; i++) {
     if(note_pitch[i] != 255)
       continue;
@@ -367,23 +350,6 @@ void stop_note(byte pitch, byte channel) {
   // Stop _all notes with the specified pitch
   byte start = 0;
   byte end = 4;
-
-  // NOTE(MattyG) Comment this block in to bifurcate channels/outputs 
-  // SEE ABOVE
-  // switch (channel) {
-  //   case 1:
-  //     start = 0;
-  //     end = 2;
-  //     break;
-
-  //   case 2:
-  //     start = 2;
-  //     end = 4;
-  //     break;
-
-  //   default:
-  //     return;
-  // }
 
   for(byte i = start; i < end; i++) {
     if(note_pitch[i] != pitch)
@@ -432,7 +398,7 @@ void kill_all_notes() {
 
 inline uint32_t velocity_to_pulse_length(uint8_t velo) {
   // uint8_t random_component = random_unit8() / 128;
-  return map(velo, 1, 127, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
+  return map(velo, 1, 127, PULSEWIDTH_MIN, interrupter_pulsewidth_setpoint);
 }
 
 
