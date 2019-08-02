@@ -272,8 +272,8 @@ void read_controls() {
   // Read the potentiometers, and set the pulse width setpoint
   // This includes mapping the potentiometer values to the pulsewidth
   // as well as clamping the possible outputs
-  uint16_t pulsewidth_raw = analogRead(pulsewidth_pot);
-  interrupter_pulsewidth_setpoint = constrain(
+  int pulsewidth_raw = analogRead(pulsewidth_pot);
+  interrupter_pulsew  idth_setpoint = constrain(
     map(pulsewidth_raw, ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN),
       0, PULSEWIDTH_MAX);
 
@@ -386,7 +386,6 @@ void stop_timer(byte timer_number) {
     case 3: timer_3.end(); break;
   };
 };
-
 
 void kill_all_notes() {
   for(byte i = 0; i < 4; i++) {
