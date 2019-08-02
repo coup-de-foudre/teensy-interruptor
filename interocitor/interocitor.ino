@@ -67,24 +67,24 @@ float pulse_3_modifier = 1;
 #define NOTE_MIN 21
 #define NOTE_MAX 108
 
-#define VERSION "1.2.3"
+#define VERSION "2.0.0"
 
 // Values for bipolar/theophany
-// #define COILNAME "Cfg: Theophany"
-// #define PULSEWIDTH_MIN 5
-// #define PULSEWIDTH_MAX 100
+#define COILNAME "Cfg: Theophany"
+#define PULSEWIDTH_MIN 5
+#define PULSEWIDTH_MAX 100
 
 // Values for Orage and 2014 coil 
-#define COILNAME "Cfg: Orage"
-#define PULSEWIDTH_MIN 35
-#define PULSEWIDTH_MAX 250
+// #define COILNAME "Cfg: Orage"
+// #define PULSEWIDTH_MIN 35
+// #define PULSEWIDTH_MAX 250
 
 int clamp_pulse_width(float nominal_width) {
   return (int) constrain(nominal_width, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
 }
 
-volatile uint32_t pulse_duty_cycle_setpoint          = 10000; // NOTE(meawoppl) - units of microseconds
-volatile uint32_t old_pulse_duty_cycle_setpoint      = 0;
+volatile uint32_t pulse_period          = 10000; // NOTE(meawoppl) - units of microseconds
+volatile uint32_t old_pulse_period      = 0;
 volatile uint16_t interrupter_pulsewidth_setpoint    = 100;
 volatile uint8_t  system_mode                        = 0;     // System Mode, 2 = USB, 1 = MIDI-RX, 0 = Clock
 
@@ -101,6 +101,8 @@ volatile uint8_t  system_mode                        = 0;     // System Mode, 2 
 uint8_t note_channel[TIMER_COUNT] = {0, 0, 0, 0};
 uint8_t note_pitch[TIMER_COUNT] = {255, 255, 255, 255};
 uint8_t note_velocity[TIMER_COUNT] = {0, 0, 0, 0};
+
+float bent_value_cents = 0;
 
 #include "midi_constants.h"
 #include "display.h"
@@ -152,6 +154,7 @@ void setup() {
   MIDI.begin(MIDI_CHANNEL_OMNI);
   MIDI.setHandleNoteOn(HandleNoteOn);
   MIDI.setHandleNoteOff(HandleNoteOff);
+  MIDI.setHandlePitchBend(HandlePitchBend);
 
   init_display();
 
@@ -196,9 +199,9 @@ void midi_runloop() {
 }
 
 bool update_pulse_duty_cycle() {
-  if( (old_pulse_duty_cycle_setpoint + 50) < pulse_duty_cycle_setpoint || 
-      (old_pulse_duty_cycle_setpoint - 50) > pulse_duty_cycle_setpoint ) {
-    old_pulse_duty_cycle_setpoint = pulse_duty_cycle_setpoint;
+  if( (old_pulse_period + 50) < pulse_period || 
+      (old_pulse_period - 50) > pulse_period ) {
+    old_pulse_period = pulse_period;
     return true;
   }
   return false;
@@ -239,7 +242,7 @@ void loop() {
       if(update_pulse_duty_cycle()) {
         timer_0.end();
         delay(10);
-        timer_0.begin(pulse_static, pulse_duty_cycle_setpoint);
+        timer_0.begin(pulse_static, pulse_period);
       };
     };
     
@@ -260,22 +263,33 @@ void loop() {
 
       // Ensure that we ring-down for at least 2x that time
       // Linear approximation to Poisson arrival time
-      delay_time = map(random_unit8(), 0, 256, interrupter_pulsewidth_setpoint * 2, pulse_duty_cycle_setpoint * 2);
+      delay_time = map(random_unit8(), 0, 256, interrupter_pulsewidth_setpoint * 2, pulse_period * 2);
       delayMicroseconds(delay_time);
     };
   };
 };
 
+// Midi.h outputs values between -8192, 8192 which we map here to 
+// to cents: https://en.wikipedia.org/wiki/Cent_(music)
+// Assumption is that input range is +- 2 semitones
+void HandlePitchBend(byte channel, int bend){
+    bent_value_cents = mapf(bend, -8192, 8192, -200, 200);
+    bend_all_notes(bent_value_cents);
+}
+
 void read_controls() {
   act_on_estop();
 
   // Read the potentiometers, and set the pulse width setpoint
+  // This includes mapping the potentiometer values to the pulsewidth
+  // as well as clamping the possible outputs
+  int pulsewidth_raw = analogRead(pulsewidth_pot);
   interrupter_pulsewidth_setpoint = constrain(
-    map(analogRead(pulsewidth_pot), ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN),
-    0, PULSEWIDTH_MAX);
+    map(pulsewidth_raw, ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN),
+      0, PULSEWIDTH_MAX);
 
   // Time between pulses in microseconds
-  pulse_duty_cycle_setpoint = map(analogRead(duty_cycle_pot), 128, 0, 1000, 100000);
+  pulse_period = map(analogRead(duty_cycle_pot), 128, 0, 1000, 100000);
 
   // Read the input switches, and set the global system_mode var
   uint8_t midi_vs_pulse  = digitalReadFast(midi_mode_switch);
@@ -328,23 +342,7 @@ void HandleNoteOff(byte channel, byte pitch, byte velocity) {
 
 void play_note(byte pitch, byte velocity, byte channel) {
   // if we find a timer free, start a note with pitch/velocity specified
-  byte start, end;
-  switch (channel) {
-    case 1:
-      start = 0;
-      end = 2;
-      break;
-
-    case 2:
-      start = 2;
-      end = 4;
-      break;
-
-    default:
-      return;
-  }
-
-  for(byte i = start; i < end; i++) {
+  for(byte i = 0; i < 4; i++) {
     if(note_pitch[i] != 255)
       continue;
 
@@ -358,23 +356,7 @@ void play_note(byte pitch, byte velocity, byte channel) {
 
 void stop_note(byte pitch, byte channel) {
   // Stop _all notes with the specified pitch
-  byte start, end;
-  switch (channel) {
-    case 1:
-      start = 0;
-      end = 2;
-      break;
-
-    case 2:
-      start = 2;
-      end = 4;
-      break;
-
-    default:
-      return;
-  }
-
-  for(byte i = start; i < end; i++) {
+  for(byte i = 0; i < 4; i++) {
     if(note_pitch[i] != pitch)
       continue;
     
@@ -390,6 +372,19 @@ void setup_note(byte pitch, byte timer_number) {
   pulse_mod_array[timer_number] = mapf(pitch, NOTE_MIN, NOTE_MAX, MODIFIER_MAX, MODIFIER_MIN);
   start_timer(timer_number, midi_period_us[pitch]);
 };
+
+void bend_all_notes(float cents) {
+  for (int i = 0; i < 4; i++)
+  {
+    byte pitch = note_pitch[i];
+    float f = midi_freq[pitch] * pow(2, cents / 1200.0);
+    float p = 1.0/f;
+    int period_us = round(p * 1000000);
+    
+    update_timer(i, period_us);  
+  }
+};
+
 
 void start_timer(byte timer_number, uint32_t period_us) {
   // Start timer 'timer_number' to trigger every 'period_us' microseconds
@@ -410,6 +405,15 @@ void stop_timer(byte timer_number) {
   };
 };
 
+void update_timer(byte timer_number, uint32_t period_us) {
+  switch(timer_number) {
+    case 0: timer_0.update(period_us); break;
+    case 1: timer_1.update(period_us); break;
+    case 2: timer_2.update(period_us); break;
+    case 3: timer_3.update(period_us); break;
+  };
+};
+
 
 void kill_all_notes() {
   for(byte i = 0; i < 4; i++) {
@@ -421,7 +425,7 @@ void kill_all_notes() {
 
 inline uint32_t velocity_to_pulse_length(uint8_t velo) {
   // uint8_t random_component = random_unit8() / 128;
-  return map(velo, 1, 127, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
+  return map(velo, 1, 127, PULSEWIDTH_MIN, interrupter_pulsewidth_setpoint);
 }
 
 

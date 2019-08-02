@@ -2,6 +2,7 @@
 
 // 1 will have pulse readout in ms, 0 is hz
 #define READOUT_MS 0
+#define DEBUG_BEND false
 
 LiquidCrystal vfd(3, 4, 5, 6, 7, 2);                // (RS, Enable, D4, D5, D6, D7)
 
@@ -21,7 +22,6 @@ void update_top_display_line(char * contents) {
   vfd.print(contents);
 }
 
-
 unsigned long last_display_millis = 0;
 
 void update_bottom_display_line() {
@@ -30,23 +30,30 @@ void update_bottom_display_line() {
     return;
 
   vfd.setCursor(0, 1);
-  vfd.print("      ");
-  vfd.setCursor(0, 1);
-  vfd.print(interrupter_pulsewidth_setpoint);
-  vfd.write(0xE4); // <- mu
-  vfd.print("s ");
 
+  if(DEBUG_BEND){  
+    vfd.print("       ");
+    vfd.setCursor(2, 1);
+    vfd.print(bent_value_cents);
+  } else {
+    vfd.print("W<     ");
+    vfd.setCursor(2, 1);
+    vfd.print(interrupter_pulsewidth_setpoint);
+    vfd.write(0xE4); // <- mu
+    vfd.print("s ");
+  }
+  
   if ((system_mode == 0) or (system_mode == 4)) {
-      vfd.setCursor(6, 1);
+      vfd.setCursor(7, 1);
       vfd.print("          ");
       vfd.setCursor(8, 1);
 
       // NOTE (meawoppl) - This changes the readout between ms and Hz
       if (READOUT_MS) {
-        vfd.print(pulse_duty_cycle_setpoint / 1000);
+        vfd.print(pulse_period   / 1000);
         vfd.print("ms  ");
       } else {
-        vfd.print(( (float) 1 / ((float)(pulse_duty_cycle_setpoint / (float) 1000000))  ));
+        vfd.print(( (float) 1 / ((float)(pulse_period / (float) 1000000))  ));
         vfd.print("Hz   ");
       }
   }
