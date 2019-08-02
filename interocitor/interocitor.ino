@@ -70,21 +70,21 @@ float pulse_3_modifier = 1;
 #define VERSION "1.2.3"
 
 // Values for bipolar/theophany
-// #define COILNAME "Cfg: Theophany"
-// #define PULSEWIDTH_MIN 5
-// #define PULSEWIDTH_MAX 100
+#define COILNAME "Cfg: Theophany"
+#define PULSEWIDTH_MIN 5
+#define PULSEWIDTH_MAX 100
 
 // Values for Orage and 2014 coil 
-#define COILNAME "Cfg: Orage"
-#define PULSEWIDTH_MIN 35
-#define PULSEWIDTH_MAX 250
+// #define COILNAME "Cfg: Orage"
+// #define PULSEWIDTH_MIN 35
+// #define PULSEWIDTH_MAX 250
 
 int clamp_pulse_width(float nominal_width) {
   return (int) constrain(nominal_width, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
 }
 
-volatile uint32_t pulse_duty_cycle_setpoint          = 10000; // NOTE(meawoppl) - units of microseconds
-volatile uint32_t old_pulse_duty_cycle_setpoint      = 0;
+volatile uint32_t pulse_period          = 10000; // NOTE(meawoppl) - units of microseconds
+volatile uint32_t old_pulse_period      = 0;
 volatile uint16_t interrupter_pulsewidth_setpoint    = 100;
 volatile uint8_t  system_mode                        = 0;     // System Mode, 2 = USB, 1 = MIDI-RX, 0 = Clock
 
@@ -196,9 +196,9 @@ void midi_runloop() {
 }
 
 bool update_pulse_duty_cycle() {
-  if( (old_pulse_duty_cycle_setpoint + 50) < pulse_duty_cycle_setpoint || 
-      (old_pulse_duty_cycle_setpoint - 50) > pulse_duty_cycle_setpoint ) {
-    old_pulse_duty_cycle_setpoint = pulse_duty_cycle_setpoint;
+  if( (old_pulse_period + 50) < pulse_period || 
+      (old_pulse_period - 50) > pulse_period ) {
+    old_pulse_period = pulse_period;
     return true;
   }
   return false;
@@ -239,7 +239,7 @@ void loop() {
       if(update_pulse_duty_cycle()) {
         timer_0.end();
         delay(10);
-        timer_0.begin(pulse_static, pulse_duty_cycle_setpoint);
+        timer_0.begin(pulse_static, pulse_period);
       };
     };
     
@@ -260,7 +260,7 @@ void loop() {
 
       // Ensure that we ring-down for at least 2x that time
       // Linear approximation to Poisson arrival time
-      delay_time = map(random_unit8(), 0, 256, interrupter_pulsewidth_setpoint * 2, pulse_duty_cycle_setpoint * 2);
+      delay_time = map(random_unit8(), 0, 256, interrupter_pulsewidth_setpoint * 2, pulse_period * 2);
       delayMicroseconds(delay_time);
     };
   };
@@ -270,12 +270,15 @@ void read_controls() {
   act_on_estop();
 
   // Read the potentiometers, and set the pulse width setpoint
+  // This includes mapping the potentiometer values to the pulsewidth
+  // as well as clamping the possible outputs
+  uint16_t pulsewidth_raw = analogRead(pulsewidth_pot);
   interrupter_pulsewidth_setpoint = constrain(
-    map(analogRead(pulsewidth_pot), ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN),
-    0, PULSEWIDTH_MAX);
+    map(pulsewidth_raw, ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN),
+      0, PULSEWIDTH_MAX);
 
   // Time between pulses in microseconds
-  pulse_duty_cycle_setpoint = map(analogRead(duty_cycle_pot), 128, 0, 1000, 100000);
+  pulse_period = map(analogRead(duty_cycle_pot), 128, 0, 1000, 100000);
 
   // Read the input switches, and set the global system_mode var
   uint8_t midi_vs_pulse  = digitalReadFast(midi_mode_switch);
