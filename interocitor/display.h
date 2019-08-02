@@ -29,11 +29,15 @@ void update_bottom_display_line() {
     return;
 
   vfd.setCursor(0, 1);
-  vfd.print("W<     ");
+  
+  vfd.print("       ");
   vfd.setCursor(2, 1);
-  vfd.print(interrupter_pulsewidth_setpoint);
-  vfd.write(0xE4); // <- mu
-  vfd.print("s ");
+  vfd.print(bent_value_cents);
+  // vfd.print("W<     ");
+  // vfd.setCursor(2, 1);
+  // vfd.print(interrupter_pulsewidth_setpoint);
+  // vfd.write(0xE4); // <- mu
+  // vfd.print("s ");
 
   if ((system_mode == 0) or (system_mode == 4)) {
       vfd.setCursor(7, 1);

@@ -102,6 +102,8 @@ uint8_t note_channel[TIMER_COUNT] = {0, 0, 0, 0};
 uint8_t note_pitch[TIMER_COUNT] = {255, 255, 255, 255};
 uint8_t note_velocity[TIMER_COUNT] = {0, 0, 0, 0};
 
+float bent_value_cents = 0;
+
 #include "midi_constants.h"
 #include "display.h"
 #include "entropy.h"
@@ -152,6 +154,7 @@ void setup() {
   MIDI.begin(MIDI_CHANNEL_OMNI);
   MIDI.setHandleNoteOn(HandleNoteOn);
   MIDI.setHandleNoteOff(HandleNoteOff);
+  MIDI.setHandlePitchBend(HandlePitchBend);
 
   init_display();
 
@@ -266,6 +269,14 @@ void loop() {
   };
 };
 
+// Midi.h outputs values between -8192, 8192 which we map here to 
+// to cents: https://en.wikipedia.org/wiki/Cent_(music)
+// Assumption is that input range is +- 2 semitones
+void HandlePitchBend(byte channel, int bend){
+    bent_value_cents = mapf(bend, -8192, 8192, -200, 200);
+    bend_all_notes(bent_value_cents);
+}
+
 void read_controls() {
   act_on_estop();
 
@@ -331,10 +342,7 @@ void HandleNoteOff(byte channel, byte pitch, byte velocity) {
 
 void play_note(byte pitch, byte velocity, byte channel) {
   // if we find a timer free, start a note with pitch/velocity specified
-  byte start = 0;
-  byte end = 4;
-
-  for(byte i = start; i < end; i++) {
+  for(byte i = 0; i < 4; i++) {
     if(note_pitch[i] != 255)
       continue;
 
@@ -348,10 +356,7 @@ void play_note(byte pitch, byte velocity, byte channel) {
 
 void stop_note(byte pitch, byte channel) {
   // Stop _all notes with the specified pitch
-  byte start = 0;
-  byte end = 4;
-
-  for(byte i = start; i < end; i++) {
+  for(byte i = 0; i < 4; i++) {
     if(note_pitch[i] != pitch)
       continue;
     
@@ -367,6 +372,19 @@ void setup_note(byte pitch, byte timer_number) {
   pulse_mod_array[timer_number] = mapf(pitch, NOTE_MIN, NOTE_MAX, MODIFIER_MAX, MODIFIER_MIN);
   start_timer(timer_number, midi_period_us[pitch]);
 };
+
+void bend_all_notes(float cents) {
+  for (int i = 0; i < 4; i++)
+  {
+    byte pitch = note_pitch[i];
+    float f = midi_freq[pitch] * pow(2, cents / 1200.0);
+    float p = 1.0/f;
+    int period_us = round(p * 1000000);
+    
+    update_timer(i, period_us);  
+  }
+};
+
 
 void start_timer(byte timer_number, uint32_t period_us) {
   // Start timer 'timer_number' to trigger every 'period_us' microseconds
@@ -386,6 +404,16 @@ void stop_timer(byte timer_number) {
     case 3: timer_3.end(); break;
   };
 };
+
+void update_timer(byte timer_number, uint32_t period_us) {
+  switch(timer_number) {
+    case 0: timer_0.update(period_us); break;
+    case 1: timer_1.update(period_us); break;
+    case 2: timer_2.update(period_us); break;
+    case 3: timer_3.update(period_us); break;
+  };
+};
+
 
 void kill_all_notes() {
   for(byte i = 0; i < 4; i++) {
