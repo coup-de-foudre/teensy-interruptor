@@ -30,11 +30,11 @@ Pulses -> D21
 10k Potentiometers ---------- ||
 Pulse Width / Power Pot
 GND --\/\/\/\/\-- 3v3
-         | A0
+         | A1
 
 Pulse Duty Cycle Pot
 GND --/\/\/\/\/-- 3V3
-         | A1
+         | A0
 
 
 INPUTS ----------------------- ||
