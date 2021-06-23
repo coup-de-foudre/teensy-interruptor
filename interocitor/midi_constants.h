@@ -31,4 +31,4 @@ float midi_freq[128] = {
 };
 
 
-const char *note_name[12] = {"C ", "C#", "D ", "D#", "E ", "F", "F#", "G ", "G#", "A ", "A#", "B "};
+const char *note_name[12] = {"C ", "C#", "D ", "D#", "E ", "F ", "F#", "G ", "G#", "A ", "A#", "B "};
