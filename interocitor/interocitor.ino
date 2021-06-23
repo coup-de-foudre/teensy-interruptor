@@ -115,7 +115,6 @@ float mapf(float x, float in_min, float in_max, float out_min, float out_max)
 
 // Enable the below to get a jankey vis of what midi notes
 // are coming into the system
-// #define DEBUGMIDI
 void debug_thing(int thing)
 {
   vfd.setCursor(0, 0);
@@ -334,22 +333,20 @@ void read_controls()
   uint8_t midi_vs_pulse = digitalReadFast(midi_mode_switch);
   uint8_t sub_setting = digitalReadFast(pulse_mode_switch);
 
-  if ((midi_vs_pulse == 1) and (sub_setting == 0))
+  if ((midi_vs_pulse == 1))
   {
-    system_mode = SM_MIDI_USB;
+    if (sub_setting == 0){
+      system_mode = SM_MIDI_USB;
+    } else {
+      system_mode = SM_MIDI_JACK;
+    }
+  } else {
+    if (sub_setting == 0){
+      system_mode = SM_FREQ_FIXED;
+    } else {
+      system_mode = SM_FREQ_PINK;
+    }
   }
-  else if ((midi_vs_pulse == 1) and (sub_setting == 1))
-  {
-    system_mode = SM_MIDI_JACK;
-  }
-  else if ((midi_vs_pulse == 0) and (sub_setting == 0))
-  {
-    system_mode = SM_FREQ_FIXED;
-  }
-  else if ((midi_vs_pulse == 0) and (sub_setting == 1))
-  {
-    system_mode = SM_FREQ_PINK;
-  };
 };
 
 byte clamp_pitch(byte pitch)
@@ -364,9 +361,6 @@ void HandleNoteOn(byte channel, byte pitch, byte velocity)
     return;
 
   pitch = clamp_pitch(pitch);
-#ifdef DEBUGMIDI
-  debug_thing(channel);
-#endif
 
   if (velocity == 0)
   {
