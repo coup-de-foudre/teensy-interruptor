@@ -14,7 +14,7 @@ void init_display(){
 }
 
 
-void update_top_display_line(char * contents) {
+void update_top_display_line(const char* contents) {
   vfd.setCursor(0,0);
   vfd.print("                "); // Blank the line
   
@@ -58,13 +58,13 @@ void update_bottom_display_line() {
       }
   }
 
-  if ((system_mode == 1) or (system_mode == 2)) {
+  if ((system_mode == SM_MIDI_USB) or (system_mode == SM_MIDI_JACK)) {
       vfd.setCursor(8, 1);
       for(byte i = 0; i < 4; i++) {
-        if (note_velocity[i] == 0) {
+        if (active_notes[i].velocity == 0) {
           vfd.print("  ");
         } else {
-          vfd.print(note_name[note_pitch[i] % 12]);
+          vfd.print(note_name[active_notes[i].pitch % 12]);
         }
     };    
   }

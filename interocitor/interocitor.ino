@@ -1,4 +1,6 @@
 #include <MIDI.h>
+#include <LiquidCrystal.h>
+
 MIDI_CREATE_DEFAULT_INSTANCE();
 
 /* Coup De Foudre - Adapted heavily from       */
@@ -70,14 +72,17 @@ float pulse_3_modifier = 1;
 #define VERSION "2.0.0"
 
 // Values for bipolar/theophany
-#define COILNAME "Cfg: Theophany"
-#define PULSEWIDTH_MIN 5
-#define PULSEWIDTH_MAX 100
+// #define COILNAME "Cfg: Theophany"
+// #define PULSEWIDTH_MIN 5
+// #define PULSEWIDTH_MAX 100
 
 // Values for Orage and 2014 coil 
-// #define COILNAME "Cfg: Orage"
-// #define PULSEWIDTH_MIN 35
-// #define PULSEWIDTH_MAX 250
+#define COILNAME "Cfg: Orage"
+#define PULSEWIDTH_MIN 35
+#define PULSEWIDTH_MAX 250
+
+
+#include "util.h"
 
 int clamp_pulse_width(float nominal_width) {
   return (int) constrain(nominal_width, PULSEWIDTH_MIN, PULSEWIDTH_MAX);
@@ -86,7 +91,7 @@ int clamp_pulse_width(float nominal_width) {
 volatile uint32_t pulse_period          = 10000; // NOTE(meawoppl) - units of microseconds
 volatile uint32_t old_pulse_period      = 0;
 volatile uint16_t interrupter_pulsewidth_setpoint    = 100;
-volatile uint8_t  system_mode                        = 0;     // System Mode, 2 = USB, 1 = MIDI-RX, 0 = Clock
+volatile SYS_MODE system_mode;     // System Mode, 2 = USB, 1 = MIDI-RX, 0 = Clock
 
 // In the below set of callbacks, we map the triple (c, p, v)
 // to an individual timer keyed on p.  This way multiple notes
@@ -95,18 +100,15 @@ volatile uint8_t  system_mode                        = 0;     // System Mode, 2 
 #define TIMER_COUNT 4
 
 // Note scheduling array,
-// index is 1:1 with timer
-// contents store the velocity
 // Storage of 255 indicates an EMPTY SLOT
-uint8_t note_channel[TIMER_COUNT] = {0, 0, 0, 0};
-uint8_t note_pitch[TIMER_COUNT] = {255, 255, 255, 255};
-uint8_t note_velocity[TIMER_COUNT] = {0, 0, 0, 0};
+volatile MidiNote active_notes[TIMER_COUNT];
 
 float bent_value_cents = 0;
 
 #include "midi_constants.h"
 #include "display.h"
 #include "entropy.h"
+
 
 const uint8_t  ADC_RESOLUTION = 7;
 const uint16_t ANALOG_SCALE_MAX = pow(2, ADC_RESOLUTION) - 2;
@@ -170,33 +172,46 @@ void setup() {
 };
 
 
-void init_mode(char* mode_name) {
-  kill_all_notes();
+void init_mode() {
+  clear_notes_and_timers();
   vfd.clear();
   vfd.setCursor(0, 0);
-  vfd.print(mode_name);
+  switch(system_mode) {
+    case SM_MIDI_USB:
+      vfd.print("MIDI Mode (USB)");
+      break;
+    case SM_MIDI_JACK:
+      vfd.print("MIDI Mode (PORT)");
+      break;
+    case SM_FREQ_FIXED:
+      vfd.print("Fixed Freq.");
+      break;
+    case SM_FREQ_PINK:
+      vfd.print("Pink Noise");
+      break;      
+  }
+
   delay(100);
 }
 
 void act_on_estop() {
   if(digitalReadFast(estop_switch) == 0) {
-    kill_all_notes();
+    // Clear all notes and pending timers
+    clear_notes_and_timers();
 
+    // Force the outputs to low
     digitalWriteFast(channel_1_out, LOW);
     digitalWriteFast(channel_2_out, LOW);
+
+    // Display what has happened
     vfd.setCursor(0, 0);
     vfd.print("      ESTOP     ");
+
     // Require HW reboot to exit
     while(true) {};
-
   }
 }
 
-void midi_runloop() {
-  read_controls();
-  update_bottom_display_line();
-  act_on_estop();
-}
 
 bool update_pulse_duty_cycle() {
   if( (old_pulse_period + 50) < pulse_period || 
@@ -207,66 +222,77 @@ bool update_pulse_duty_cycle() {
   return false;
 }
 
+void preloop() {
+  act_on_estop();
+  read_controls();
+  update_bottom_display_line();
+}
+
+void midi_usb_loop(){
+  while (system_mode == SM_MIDI_USB) {
+    preloop();
+    usbMIDI.read();
+  };
+}
+
+void midi_jack_loop(){
+  while (system_mode == SM_MIDI_JACK) {
+    preloop();
+    MIDI.read();
+  };
+}
+
+void fixed_freq_loop() {
+  while (system_mode == SM_FREQ_FIXED) {
+    preloop();
+
+    // NOTE (meawoppl) - The knob readout is noisy, so only ack large changes
+    if(update_pulse_duty_cycle()) {
+      timer_0.end();
+      delay(10);
+      timer_0.begin(pulse_static, pulse_period);
+    };
+  };
+}
+
+void pink_noise_loop() {
+  int delay_time;
+  while (system_mode == SM_FREQ_PINK) {
+    preloop();
+
+    update_pulse_duty_cycle();
+
+    digitalWriteFast(channel_1_out, HIGH);
+    delay_safe_micros(interrupter_pulsewidth_setpoint);
+    digitalWriteFast(channel_1_out, LOW);
+
+    // Ensure that we ring-down for at least 2x that time
+    // Linear approximation to Poisson arrival time
+    delay_time = map(random_unit8(), 0, 256, interrupter_pulsewidth_setpoint * 2, pulse_period * 2);
+    delayMicroseconds(delay_time);
+  };
+}
+
 void loop() {
   read_controls();
+  init_mode();
 
-  // USB -> MIDI mode
-  if (system_mode == 2) {
-    init_mode("MIDI Mode (USB)");
-
-    while (system_mode == 2) {
-      usbMIDI.read();
-      midi_runloop();
-    };
+  switch(system_mode) {
+    case SM_MIDI_USB:
+      midi_usb_loop();
+      break;
+    case SM_MIDI_JACK:
+      midi_jack_loop();
+      break;
+    case SM_FREQ_FIXED:
+      fixed_freq_loop();
+      break;
+    case SM_FREQ_PINK:
+      pink_noise_loop();
+      break;  
   };
 
-  // MIDI Input Mode
-  if (system_mode == 1) {
-    init_mode("MIDI Mode (PORT)");
-    
-    while (system_mode == 1) {
-      MIDI.read();
-      midi_runloop();
-    };
-  };
-  
-  // Pulse clock mode
-  if (system_mode == 0) {
-    init_mode("Fixed Freq.");
-    
-    while (system_mode == 0) {
-      read_controls();
-      update_bottom_display_line();      
-
-      // NOTE (meawoppl) - The knob readout is noisy, so only ack large changes
-      if(update_pulse_duty_cycle()) {
-        timer_0.end();
-        delay(10);
-        timer_0.begin(pulse_static, pulse_period);
-      };
-    };
-    
-    timer_0.end();
-  };
-
-  if (system_mode == 4) {
-    init_mode("Pink Noise");
-    int delay_time;
-    while (system_mode == 4) {
-      read_controls();
-      update_bottom_display_line();
-      update_pulse_duty_cycle();
-
-      digitalWriteFast(channel_1_out, HIGH);
-      delay_safe_micros(interrupter_pulsewidth_setpoint);
-      digitalWriteFast(channel_1_out, LOW);
-
-      // Ensure that we ring-down for at least 2x that time
-      // Linear approximation to Poisson arrival time
-      delay_time = map(random_unit8(), 0, 256, interrupter_pulsewidth_setpoint * 2, pulse_period * 2);
-      delayMicroseconds(delay_time);
-    };
-  };
+  clear_notes_and_timers();
 };
 
 // Midi.h outputs values between -8192, 8192 which we map here to 
@@ -278,8 +304,6 @@ void HandlePitchBend(byte channel, int bend){
 }
 
 void read_controls() {
-  act_on_estop();
-
   // Read the potentiometers, and set the pulse width setpoint
   // This includes mapping the potentiometer values to the pulsewidth
   // as well as clamping the possible outputs
@@ -296,23 +320,19 @@ void read_controls() {
   uint8_t sub_setting = digitalReadFast(pulse_mode_switch);
   
   if ((midi_vs_pulse == 1) and (sub_setting == 0)) {
-    // MIDI USB
-    system_mode = 2;
+    system_mode = SM_MIDI_USB;
   } 
   else if ((midi_vs_pulse == 1) and (sub_setting == 1))
   { 
-    // MIDI Jack
-    system_mode = 1;
+    system_mode = SM_MIDI_JACK;
   }
   else if ((midi_vs_pulse == 0) and (sub_setting == 0))
   {
-    // Fixed Pulse mode
-    system_mode = 0;
+    system_mode = SM_FREQ_FIXED;
   }
   else if ((midi_vs_pulse == 0) and (sub_setting == 1)) 
   {
-    // Static noise mode
-    system_mode = 4;
+    system_mode = SM_FREQ_PINK;
   };
 };
 
@@ -342,13 +362,14 @@ void HandleNoteOff(byte channel, byte pitch, byte velocity) {
 
 void play_note(byte pitch, byte velocity, byte channel) {
   // if we find a timer free, start a note with pitch/velocity specified
-  for(byte i = 0; i < 4; i++) {
-    if(note_pitch[i] != 255)
+  for(byte i = 0; i < TIMER_COUNT; i++) {
+
+    if(active_notes[i].pitch != 255)
       continue;
 
-    note_pitch[i] = pitch;
-    note_velocity[i] = velocity;
-    note_channel[i] = channel;
+    active_notes[i].pitch = pitch;
+    active_notes[i].velocity = velocity;
+    active_notes[i].channel = channel;
     setup_note(pitch, i);
     break;
   };
@@ -356,13 +377,13 @@ void play_note(byte pitch, byte velocity, byte channel) {
 
 void stop_note(byte pitch, byte channel) {
   // Stop _all notes with the specified pitch
-  for(byte i = 0; i < 4; i++) {
-    if(note_pitch[i] != pitch)
+  for(byte i = 0; i < TIMER_COUNT; i++) {
+    if(active_notes[i].pitch != pitch)
       continue;
     
     stop_timer(i);
-    note_velocity[i] = 0;
-    note_pitch[i] = 255;
+    active_notes[i].velocity = 0;
+    active_notes[i].pitch = 255;
   };
 };
 
@@ -376,7 +397,7 @@ void setup_note(byte pitch, byte timer_number) {
 void bend_all_notes(float cents) {
   for (int i = 0; i < 4; i++)
   {
-    byte pitch = note_pitch[i];
+    byte pitch = active_notes[i].pitch;
     float f = midi_freq[pitch] * pow(2, cents / 1200.0);
     float p = 1.0/f;
     int period_us = round(p * 1000000);
@@ -415,10 +436,12 @@ void update_timer(byte timer_number, uint32_t period_us) {
 };
 
 
-void kill_all_notes() {
-  for(byte i = 0; i < 4; i++) {
-    note_pitch[i] = 255;
-    note_velocity[i] = 0;
+void clear_notes_and_timers() {
+  for(byte i = 0; i < TIMER_COUNT; i++) {
+
+    active_notes[i].pitch = 255;
+    active_notes[i].velocity = 0;
+    active_notes[i].channel = 0;
     stop_timer(i);
   };
 };
@@ -443,24 +466,24 @@ void pulse_static() {
 // Note timer subroutine
 void pulse_0() {
   digitalWriteFast(channel_1_out, HIGH);
-  delay_safe_micros(velocity_to_pulse_length(note_velocity[0]));
+  delay_safe_micros(velocity_to_pulse_length(active_notes[0].velocity));
   digitalWriteFast(channel_1_out, LOW);
 };
 
 void pulse_1() {
   digitalWriteFast(channel_1_out, HIGH);
-  delay_safe_micros(velocity_to_pulse_length(note_velocity[1]));
+  delay_safe_micros(velocity_to_pulse_length(active_notes[1].velocity));
   digitalWriteFast(channel_1_out, LOW);
 };
 
 void pulse_2() {
   digitalWriteFast(channel_1_out, HIGH);
-  delay_safe_micros(velocity_to_pulse_length(note_velocity[2]));
+  delay_safe_micros(velocity_to_pulse_length(active_notes[2].velocity));
   digitalWriteFast(channel_1_out, LOW);
 };
 
 void pulse_3() {
   digitalWriteFast(channel_1_out, HIGH);
-  delay_safe_micros(velocity_to_pulse_length(note_velocity[3]));
+  delay_safe_micros(velocity_to_pulse_length(active_notes[3].velocity));
   digitalWriteFast(channel_1_out, LOW);
 };
