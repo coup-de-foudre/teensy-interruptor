@@ -11,5 +11,12 @@ struct MidiNote
     uint8_t channel;
     uint8_t pitch;
     uint8_t velocity;
-    unsigned long start_millis;
+    uint32_t phase_us;
+    uint32_t period_us;
+};
+
+enum MUSIC_STATE {
+    SM_NEXT,
+    SM_WAIT,
+    SM_PULSE,
 };

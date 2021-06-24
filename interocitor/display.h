@@ -33,20 +33,11 @@ void update_bottom_display_line()
 
   vfd.setCursor(0, 1);
 
-  if (DEBUG_BEND)
-  {
-    vfd.print("       ");
-    vfd.setCursor(2, 1);
-    vfd.print(bent_value_cents);
-  }
-  else
-  {
-    vfd.print("W<     ");
-    vfd.setCursor(2, 1);
-    vfd.print(interrupter_pulsewidth_setpoint);
-    vfd.write(0xE4); // <- mu
-    vfd.print("s ");
-  }
+  vfd.print("W<     ");
+  vfd.setCursor(2, 1);
+  vfd.print(interrupter_pulsewidth_setpoint);
+  vfd.write(0xE4); // <- mu
+  vfd.print("s ");
 
   if ((system_mode == 0) or (system_mode == 4))
   {

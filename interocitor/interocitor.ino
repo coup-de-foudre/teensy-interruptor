@@ -75,6 +75,7 @@ IntervalTimer timer_0, timer_1, timer_2, timer_3;
 #define PULSEWIDTH_MAX 250
 
 #include "util.h"
+#include "midi_constants.h"
 
 int clamp_pulse_width(float nominal_width)
 {
@@ -95,9 +96,34 @@ volatile SYS_MODE system_mode;
 // Note scheduling array,
 volatile MidiNote active_notes[TIMER_COUNT];
 
+void set_note(int i, byte channel, byte pitch, byte velocity){
+  active_notes[i].channel = channel;
+  active_notes[i].pitch = pitch;
+  active_notes[i].velocity = velocity;
+  active_notes[i].period_us = midi_period_us[pitch];
+  active_notes[i].phase_us = micros() % active_notes[i].period_us;
+}
+
+void clear_note(int i) {
+  active_notes[i].velocity = 0;
+  active_notes[i].pitch = 255;
+  active_notes[i].channel = 0;
+  active_notes[i].period_us = midi_period_us[0];
+  active_notes[i].phase_us = 0;
+}
+
+int find_first_empty_note_index() {
+  for(int i = 0; i<TIMER_COUNT; i++){
+    if(active_notes[i].pitch == 255){
+      return i;
+    }
+  }
+  return -1;
+}
+
+
 float bent_value_cents = 0;
 
-#include "midi_constants.h"
 #include "display.h"
 #include "entropy.h"
 
@@ -231,6 +257,7 @@ void preloop()
 
 void midi_usb_loop()
 {
+  start_music_sm();
   while (system_mode == SM_MIDI_USB)
   {
     preloop();
@@ -240,6 +267,7 @@ void midi_usb_loop()
 
 void midi_jack_loop()
 {
+  start_music_sm();
   while (system_mode == SM_MIDI_JACK)
   {
     preloop();
@@ -312,7 +340,7 @@ void loop()
 // Assumption is that input range is +- 2 semitones
 void HandlePitchBend(byte channel, int bend)
 {
-  bent_value_cents = mapf(bend, -8192, 8192, -200, 200);
+  float bent_value_cents = mapf(bend, -8192, 8192, -200, 200);
   bend_all_notes(bent_value_cents);
 }
 
@@ -385,18 +413,12 @@ void HandleNoteOff(byte channel, byte pitch, byte velocity)
 void play_note(byte pitch, byte velocity, byte channel)
 {
   // if we find a timer free, start a note with pitch/velocity specified
-  for (byte i = 0; i < TIMER_COUNT; i++)
-  {
-    if (active_notes[i].pitch != 255)
-      continue;
+  int idx = find_first_empty_note_index();
+  if (idx == -1){
+    return;
+  }
 
-    active_notes[i].pitch = pitch;
-    active_notes[i].velocity = velocity;
-    active_notes[i].channel = channel;
-    active_notes[i].start_millis = millis();
-    start_timer(i, midi_period_us[pitch]);
-    break;
-  };
+  set_note(idx, channel, pitch, velocity);
 };
 
 void stop_note(byte pitch, byte channel)
@@ -407,9 +429,10 @@ void stop_note(byte pitch, byte channel)
     if (active_notes[i].pitch != pitch)
       continue;
 
-    stop_timer(i);
-    active_notes[i].velocity = 0;
     active_notes[i].pitch = 255;
+    active_notes[i].velocity = 0;
+    active_notes[i].channel = 0;
+    active_notes[i].phase_us = 0;
   };
 };
 
@@ -420,79 +443,22 @@ void bend_all_notes(float cents)
     byte pitch = active_notes[i].pitch;
     float f = midi_freq[pitch] * pow(2, cents / 1200.0);
     float p = 1.0 / f;
-    int period_us = round(p * 1000000);
-
-    update_timer(i, period_us);
+    active_notes[i].period_us = round(p * 1000000);
   }
 };
 
-void start_timer(byte timer_number, uint32_t period_us)
-{
-  // Start timer 'timer_number' to trigger every 'period_us' microseconds
-  switch (timer_number)
-  {
-  case 0:
-    timer_0.begin(pulse_0, period_us);
-    break;
-  case 1:
-    timer_1.begin(pulse_1, period_us);
-    break;
-  case 2:
-    timer_2.begin(pulse_2, period_us);
-    break;
-  case 3:
-    timer_3.begin(pulse_3, period_us);
-    break;
-  };
-}
-
-void stop_timer(byte timer_number)
-{
-  switch (timer_number)
-  {
-  case 0:
-    timer_0.end();
-    break;
-  case 1:
-    timer_1.end();
-    break;
-  case 2:
-    timer_2.end();
-    break;
-  case 3:
-    timer_3.end();
-    break;
-  };
-};
-
-void update_timer(byte timer_number, uint32_t period_us)
-{
-  switch (timer_number)
-  {
-  case 0:
-    timer_0.update(period_us);
-    break;
-  case 1:
-    timer_1.update(period_us);
-    break;
-  case 2:
-    timer_2.update(period_us);
-    break;
-  case 3:
-    timer_3.update(period_us);
-    break;
-  };
-};
 
 void clear_notes_and_timers()
 {
   for (byte i = 0; i < TIMER_COUNT; i++)
   {
-    active_notes[i].pitch = 255;
-    active_notes[i].velocity = 0;
-    active_notes[i].channel = 0;
-    stop_timer(i);
+    clear_note(i);
   };
+
+  timer_0.end();
+  timer_1.end();
+  timer_2.end();
+  timer_3.end();
 };
 
 inline uint32_t velocity_to_pulse_length(uint8_t velo)
@@ -507,12 +473,79 @@ void delay_safe_micros(uint32_t micros)
 }
 
 // For the pulsed (tick) mode
+const int32_t MAX_WAIT_US = 1000;
+const float DUTY_CYCLE = 0.25;
+const float PULSE_MULT = (1.0/DUTY_CYCLE) - 1.0;
+
+volatile MUSIC_STATE music_state = SM_NEXT;
+volatile int pulse_length_us = 100;
+volatile unsigned long next_pulse_start_micros = 0;
+
+void start_music_sm(){
+  music_state = SM_NEXT;
+  timer_0.begin(music_loop, 10);
+  // timer_0.priority(0);
+}
+
+void stop_music_sm() {
+  music_state = SM_NEXT;
+  timer_0.end();
+}
+
+// NOTE(meawoppl)
+// This is a tiny state machine. It has only two states:
+// SM_WAIT: Wait for a note to be less than MAX_WAIT_US
+// SM_PULSE: Play a pulse previously scheduled.
+// This uses two state variables:
+//  - music_state - The branch of the state machien
+//  - pulse_length_us - the length of the pulse to be played.
+void music_loop()
+{
+  unsigned long start_micros = micros();  
+
+  switch(music_state){
+    case SM_NEXT: {
+        uint32_t wait_us = 10000;
+        for(int i=0; i < TIMER_COUNT; i++){
+          if(active_notes[i].pitch == 255){
+            continue;
+          }
+          unsigned long phase_us = active_notes[i].phase_us;
+          unsigned long period_us = active_notes[i].period_us;
+
+          unsigned long this_wait_us = period_us - ((start_micros + phase_us) % period_us) ;
+          
+          if(this_wait_us < wait_us){
+            wait_us = this_wait_us;
+            next_pulse_start_micros = start_micros + this_wait_us;
+            pulse_length_us = velocity_to_pulse_length(active_notes[i].velocity);
+            music_state = SM_WAIT;
+          }
+        }
+      }
+      break;
+    case SM_WAIT:
+      music_state = micros() > next_pulse_start_micros ? SM_PULSE : SM_WAIT;
+      break;
+    case SM_PULSE:
+      // Actual pulse is below
+      digitalWriteFast(channel_1_out, HIGH);
+      delay_safe_micros(pulse_length_us);
+      digitalWriteFast(channel_1_out, LOW);
+      // Compute the time needed to keep duty cycle below:
+      delayMicroseconds(PULSE_MULT * pulse_length_us);
+      music_state = SM_NEXT;
+      break;     
+  }
+}
+
+// For fixed freq osc
 void pulse_static()
 {
   digitalWriteFast(channel_1_out, HIGH);
   delay_safe_micros(interrupter_pulsewidth_setpoint);
   digitalWriteFast(channel_1_out, LOW);
-}
+};
 
 // Note timer subroutine
 void pulse_0()
