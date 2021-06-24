@@ -96,7 +96,8 @@ volatile SYS_MODE system_mode;
 // Note scheduling array,
 volatile MidiNote active_notes[TIMER_COUNT];
 
-void set_note(int i, byte channel, byte pitch, byte velocity){
+void set_note(int i, byte channel, byte pitch, byte velocity)
+{
   active_notes[i].channel = channel;
   active_notes[i].pitch = pitch;
   active_notes[i].velocity = velocity;
@@ -104,7 +105,8 @@ void set_note(int i, byte channel, byte pitch, byte velocity){
   active_notes[i].phase_us = micros() % active_notes[i].period_us;
 }
 
-void clear_note(int i) {
+void clear_note(int i)
+{
   active_notes[i].velocity = 0;
   active_notes[i].pitch = 255;
   active_notes[i].channel = 0;
@@ -112,15 +114,17 @@ void clear_note(int i) {
   active_notes[i].phase_us = 0;
 }
 
-int find_first_empty_note_index() {
-  for(int i = 0; i<TIMER_COUNT; i++){
-    if(active_notes[i].pitch == 255){
+int find_first_empty_note_index()
+{
+  for (int i = 0; i < TIMER_COUNT; i++)
+  {
+    if (active_notes[i].pitch == 255)
+    {
       return i;
     }
   }
   return -1;
 }
-
 
 float bent_value_cents = 0;
 
@@ -363,15 +367,23 @@ void read_controls()
 
   if ((midi_vs_pulse == 1))
   {
-    if (sub_setting == 0){
+    if (sub_setting == 0)
+    {
       system_mode = SM_MIDI_USB;
-    } else {
+    }
+    else
+    {
       system_mode = SM_MIDI_JACK;
     }
-  } else {
-    if (sub_setting == 0){
+  }
+  else
+  {
+    if (sub_setting == 0)
+    {
       system_mode = SM_FREQ_FIXED;
-    } else {
+    }
+    else
+    {
       system_mode = SM_FREQ_PINK;
     }
   }
@@ -414,7 +426,8 @@ void play_note(byte pitch, byte velocity, byte channel)
 {
   // if we find a timer free, start a note with pitch/velocity specified
   int idx = find_first_empty_note_index();
-  if (idx == -1){
+  if (idx == -1)
+  {
     return;
   }
 
@@ -447,7 +460,6 @@ void bend_all_notes(float cents)
   }
 };
 
-
 void clear_notes_and_timers()
 {
   for (byte i = 0; i < TIMER_COUNT; i++)
@@ -475,19 +487,21 @@ void delay_safe_micros(uint32_t micros)
 // For the pulsed (tick) mode
 const int32_t MAX_WAIT_US = 1000;
 const float DUTY_CYCLE = 0.25;
-const float PULSE_MULT = (1.0/DUTY_CYCLE) - 1.0;
+const float PULSE_MULT = (1.0 / DUTY_CYCLE) - 1.0;
 
 volatile MUSIC_STATE music_state = SM_NEXT;
 volatile int pulse_length_us = 100;
 volatile unsigned long next_pulse_start_micros = 0;
 
-void start_music_sm(){
+void start_music_sm()
+{
   music_state = SM_NEXT;
   timer_0.begin(music_loop, 10);
   // timer_0.priority(0);
 }
 
-void stop_music_sm() {
+void stop_music_sm()
+{
   music_state = SM_NEXT;
   timer_0.end();
 }
@@ -501,41 +515,46 @@ void stop_music_sm() {
 //  - pulse_length_us - the length of the pulse to be played.
 void music_loop()
 {
-  unsigned long start_micros = micros();  
+  unsigned long start_micros = micros();
 
-  switch(music_state){
-    case SM_NEXT: {
-        uint32_t wait_us = 10000;
-        for(int i=0; i < TIMER_COUNT; i++){
-          if(active_notes[i].pitch == 255){
-            continue;
-          }
-          unsigned long phase_us = active_notes[i].phase_us;
-          unsigned long period_us = active_notes[i].period_us;
-
-          unsigned long this_wait_us = period_us - ((start_micros + phase_us) % period_us) ;
-          
-          if(this_wait_us < wait_us){
-            wait_us = this_wait_us;
-            next_pulse_start_micros = start_micros + this_wait_us;
-            pulse_length_us = velocity_to_pulse_length(active_notes[i].velocity);
-            music_state = SM_WAIT;
-          }
-        }
+  switch (music_state)
+  {
+  case SM_NEXT:
+  {
+    uint32_t wait_us = 10000;
+    for (int i = 0; i < TIMER_COUNT; i++)
+    {
+      if (active_notes[i].pitch == 255)
+      {
+        continue;
       }
-      break;
-    case SM_WAIT:
-      music_state = micros() > next_pulse_start_micros ? SM_PULSE : SM_WAIT;
-      break;
-    case SM_PULSE:
-      // Actual pulse is below
-      digitalWriteFast(channel_1_out, HIGH);
-      delay_safe_micros(pulse_length_us);
-      digitalWriteFast(channel_1_out, LOW);
-      // Compute the time needed to keep duty cycle below:
-      delayMicroseconds(PULSE_MULT * pulse_length_us);
-      music_state = SM_NEXT;
-      break;     
+      unsigned long phase_us = active_notes[i].phase_us;
+      unsigned long period_us = active_notes[i].period_us;
+
+      unsigned long this_wait_us = period_us - ((start_micros + phase_us) % period_us);
+
+      if (this_wait_us < wait_us)
+      {
+        wait_us = this_wait_us;
+        next_pulse_start_micros = start_micros + this_wait_us;
+        pulse_length_us = velocity_to_pulse_length(active_notes[i].velocity);
+        music_state = SM_WAIT;
+      }
+    }
+  }
+  break;
+  case SM_WAIT:
+    music_state = micros() > next_pulse_start_micros ? SM_PULSE : SM_WAIT;
+    break;
+  case SM_PULSE:
+    // Actual pulse is below
+    digitalWriteFast(channel_1_out, HIGH);
+    delay_safe_micros(pulse_length_us);
+    digitalWriteFast(channel_1_out, LOW);
+    // Compute the time needed to keep duty cycle below:
+    delayMicroseconds(PULSE_MULT * pulse_length_us);
+    music_state = SM_NEXT;
+    break;
   }
 }
 
