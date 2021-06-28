@@ -62,7 +62,7 @@ IntervalTimer timer_0, timer_1, timer_2, timer_3;
 #define NOTE_MIN 21
 #define NOTE_MAX 108
 
-#define VERSION "2.0.0"
+#define VERSION "2.1.0"
 
 // Values for bipolar/theophany
 // #define COILNAME "Cfg: Theophany"
