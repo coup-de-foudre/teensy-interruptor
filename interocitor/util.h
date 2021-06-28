@@ -13,6 +13,7 @@ struct MidiNote
     uint8_t velocity;
     uint32_t phase_us;
     uint32_t period_us;
+    uint32_t start_ms;
 };
 
 enum MUSIC_STATE {

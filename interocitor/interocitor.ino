@@ -91,10 +91,10 @@ volatile SYS_MODE system_mode;
 // to an individual timer keyed on p.  This way multiple notes
 // with the same pitch won't take multiple timer slots
 #define MY_CHANNEL 1
-#define TIMER_COUNT 4
+#define NOTE_ARRAY_SIZE 10
 
 // Note scheduling array,
-volatile MidiNote active_notes[TIMER_COUNT];
+volatile MidiNote active_notes[NOTE_ARRAY_SIZE];
 
 void set_note(int i, byte channel, byte pitch, byte velocity)
 {
@@ -103,6 +103,7 @@ void set_note(int i, byte channel, byte pitch, byte velocity)
   active_notes[i].velocity = velocity;
   active_notes[i].period_us = midi_period_us[pitch];
   active_notes[i].phase_us = micros() % active_notes[i].period_us;
+  active_notes[i].start_ms = millis();
 }
 
 void clear_note(int i)
@@ -112,11 +113,13 @@ void clear_note(int i)
   active_notes[i].channel = 0;
   active_notes[i].period_us = midi_period_us[0];
   active_notes[i].phase_us = 0;
+  active_notes[i].start_ms = 0;
 }
 
 int find_first_empty_note_index()
 {
-  for (int i = 0; i < TIMER_COUNT; i++)
+  for (int i = 0; i < NOTE_ARRAY_SIZE
+; i++)
   {
     if (active_notes[i].pitch == 255)
     {
@@ -174,12 +177,14 @@ void setup()
   usbMIDI.begin();
   usbMIDI.setHandleNoteOn(HandleNoteOn);
   usbMIDI.setHandleNoteOff(HandleNoteOff);
+  // usbMIDI.setHandleError(HandleError);
   // usbMIDI.setHandlePitchBend(HandlePitchBend);
 
   MIDI.begin(MIDI_CHANNEL_OMNI);
   MIDI.setHandleNoteOn(HandleNoteOn);
   MIDI.setHandleNoteOff(HandleNoteOff);
   MIDI.setHandlePitchBend(HandlePitchBend);
+  MIDI.setHandleError(HandleError);
 
   init_display();
 
@@ -193,6 +198,10 @@ void setup()
   update_top_display_line(VERSION);
   delay(1000);
 };
+
+void HandleError(int8_t err){
+  clear_notes();
+}
 
 void init_mode()
 {
@@ -408,7 +417,7 @@ void HandleNoteOn(byte channel, byte pitch, byte velocity)
   }
   else
   {
-    play_note(pitch, velocity, channel);
+    start_note(pitch, velocity, channel);
   };
 };
 
@@ -422,7 +431,7 @@ void HandleNoteOff(byte channel, byte pitch, byte velocity)
   stop_note(pitch, channel);
 };
 
-void play_note(byte pitch, byte velocity, byte channel)
+void start_note(byte pitch, byte velocity, byte channel)
 {
   // if we find a timer free, start a note with pitch/velocity specified
   int idx = find_first_empty_note_index();
@@ -437,7 +446,8 @@ void play_note(byte pitch, byte velocity, byte channel)
 void stop_note(byte pitch, byte channel)
 {
   // Stop _all notes with the specified pitch
-  for (byte i = 0; i < TIMER_COUNT; i++)
+  for (byte i = 0; i < NOTE_ARRAY_SIZE
+; i++)
   {
     if (active_notes[i].pitch != pitch)
       continue;
@@ -451,7 +461,8 @@ void stop_note(byte pitch, byte channel)
 
 void bend_all_notes(float cents)
 {
-  for (int i = 0; i < TIMER_COUNT; i++)
+  for (int i = 0; i < NOTE_ARRAY_SIZE
+; i++)
   {
     byte pitch = active_notes[i].pitch;
     float f = midi_freq[pitch] * pow(2, cents / 1200.0);
@@ -460,23 +471,34 @@ void bend_all_notes(float cents)
   }
 };
 
-void clear_notes_and_timers()
+void clear_notes()
 {
-  for (byte i = 0; i < TIMER_COUNT; i++)
+  for (byte i = 0; i < NOTE_ARRAY_SIZE; i++)
   {
     clear_note(i);
   };
+}
 
+void clear_notes_and_timers()
+{
+  clear_notes();
   timer_0.end();
   timer_1.end();
   timer_2.end();
   timer_3.end();
 };
 
-inline uint32_t velocity_to_pulse_length(uint8_t velo)
+inline uint32_t velocity_to_pulse_length(uint8_t velocity, uint32_t start_ms)
 {
-  // uint8_t random_component = random_unit8() / 128;
-  return map(velo, 1, 127, PULSEWIDTH_MIN, interrupter_pulsewidth_setpoint);
+  velocity += random_unit8() / 128;
+
+  uint32_t millis_since_start = millis() - start_ms;
+
+  // if(millis_since_start > 500){
+  //   velocity /= 2;
+  // }
+  
+  return map(velocity, 1, 127, PULSEWIDTH_MIN, interrupter_pulsewidth_setpoint);
 }
 
 void delay_safe_micros(uint32_t micros)
@@ -522,7 +544,8 @@ void music_loop()
   case SM_NEXT:
   {
     uint32_t wait_us = 10000;
-    for (int i = 0; i < TIMER_COUNT; i++)
+    for (int i = 0; i < NOTE_ARRAY_SIZE
+  ; i++)
     {
       if (active_notes[i].pitch == 255)
       {
@@ -537,7 +560,7 @@ void music_loop()
       {
         wait_us = this_wait_us;
         next_pulse_start_micros = start_micros + this_wait_us;
-        pulse_length_us = velocity_to_pulse_length(active_notes[i].velocity);
+        pulse_length_us = velocity_to_pulse_length(active_notes[i].velocity, active_notes[i].start_ms);
         music_state = SM_WAIT;
       }
     }
@@ -570,27 +593,27 @@ void pulse_static()
 void pulse_0()
 {
   digitalWriteFast(channel_1_out, HIGH);
-  delay_safe_micros(velocity_to_pulse_length(active_notes[0].velocity));
+  delay_safe_micros(velocity_to_pulse_length(active_notes[0].velocity, active_notes[0].start_ms));
   digitalWriteFast(channel_1_out, LOW);
 };
 
 void pulse_1()
 {
   digitalWriteFast(channel_1_out, HIGH);
-  delay_safe_micros(velocity_to_pulse_length(active_notes[1].velocity));
+  delay_safe_micros(velocity_to_pulse_length(active_notes[1].velocity, active_notes[1].start_ms));
   digitalWriteFast(channel_1_out, LOW);
 };
 
 void pulse_2()
 {
   digitalWriteFast(channel_1_out, HIGH);
-  delay_safe_micros(velocity_to_pulse_length(active_notes[2].velocity));
+  delay_safe_micros(velocity_to_pulse_length(active_notes[2].velocity, active_notes[2].start_ms));
   digitalWriteFast(channel_1_out, LOW);
 };
 
 void pulse_3()
 {
   digitalWriteFast(channel_1_out, HIGH);
-  delay_safe_micros(velocity_to_pulse_length(active_notes[3].velocity));
+  delay_safe_micros(velocity_to_pulse_length(active_notes[3].velocity, active_notes[3].start_ms));
   digitalWriteFast(channel_1_out, LOW);
 };

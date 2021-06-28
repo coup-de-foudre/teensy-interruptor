@@ -61,7 +61,7 @@ void update_bottom_display_line()
   if ((system_mode == SM_MIDI_USB) or (system_mode == SM_MIDI_JACK))
   {
     vfd.setCursor(8, 1);
-    for (byte i = 0; i < TIMER_COUNT; i++)
+    for (byte i = 0; i < NOTE_ARRAY_SIZE; i++)
     {
       if (active_notes[i].velocity == 0)
       {
