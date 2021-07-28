@@ -1,5 +1,4 @@
 #include <MIDI.h>
-#include <LiquidCrystal.h>
 
 MIDI_CREATE_DEFAULT_INSTANCE();
 
@@ -62,7 +61,7 @@ IntervalTimer timer_0, timer_1, timer_2, timer_3;
 #define NOTE_MIN 21
 #define NOTE_MAX 108
 
-#define VERSION "2.1.0"
+#define VERSION "3.0.0"
 
 // Values for bipolar/theophany
 // #define COILNAME "Cfg: Theophany"
@@ -72,7 +71,7 @@ IntervalTimer timer_0, timer_1, timer_2, timer_3;
 // Values for Orage and 2014 coil
 #define COILNAME "Cfg: Orage"
 #define PULSEWIDTH_MIN 35
-#define PULSEWIDTH_MAX 250
+#define PULSEWIDTH_MAX 120
 
 #include "util.h"
 #include "midi_constants.h"
@@ -146,17 +145,6 @@ float mapf(float x, float in_min, float in_max, float out_min, float out_max)
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-// Enable the below to get a jankey vis of what midi notes
-// are coming into the system
-void debug_thing(int thing)
-{
-  vfd.setCursor(0, 0);
-  vfd.print("        ");
-  vfd.setCursor(0, 0);
-  vfd.print("V: ");
-  vfd.print(thing);
-}
-
 void setup()
 {
   /* Pullups, impedances etc */
@@ -186,7 +174,7 @@ void setup()
   MIDI.setHandlePitchBend(HandlePitchBend);
   MIDI.setHandleError(HandleError);
 
-  init_display();
+  init_serlcd();
 
   /* Welcome Message */
   update_top_display_line("Coup De Foudre");
@@ -206,21 +194,21 @@ void HandleError(int8_t err){
 void init_mode()
 {
   clear_notes_and_timers();
-  vfd.clear();
-  vfd.setCursor(0, 0);
+  lcd.clear();
+  lcd.setCursor(0, 0);
   switch (system_mode)
   {
   case SM_MIDI_USB:
-    vfd.print("MIDI Mode (USB)");
+    update_top_display_line("MIDI Mode (USB)");
     break;
   case SM_MIDI_JACK:
-    vfd.print("MIDI Mode (PORT)");
+    update_top_display_line("MIDI Mode (PORT)");
     break;
   case SM_FREQ_FIXED:
-    vfd.print("Fixed Freq.");
+    update_top_display_line("Fixed Freq.");
     break;
   case SM_FREQ_PINK:
-    vfd.print("Pink Noise");
+    update_top_display_line("Pink Noise");
     break;
   }
 
@@ -239,8 +227,7 @@ void act_on_estop()
     digitalWriteFast(channel_2_out, LOW);
 
     // Display what has happened
-    vfd.setCursor(0, 0);
-    vfd.print("      ESTOP     ");
+    update_top_display_line("      ESTOP     ");
 
     // Require HW reboot to exit
     // This HCF loop also ensures that no new midi events are processed
@@ -324,8 +311,14 @@ void pink_noise_loop()
   };
 }
 
+bool init = false;
+
+
+
+
 void loop()
 {
+
   read_controls();
   init_mode();
 
@@ -367,6 +360,9 @@ void read_controls()
       map(pulsewidth_raw, ANALOG_SCALE_MAX, ANALOG_SCALE_MIN, PULSEWIDTH_MAX, PULSEWIDTH_MIN),
       0, PULSEWIDTH_MAX);
 
+  // TODO: meawoppl
+  interrupter_pulsewidth_setpoint = PULSEWIDTH_MIN;
+
   // Time between pulses in microseconds
   pulse_period = map(analogRead(duty_cycle_pot), 128, 0, 1000, 100000);
 
@@ -374,28 +370,31 @@ void read_controls()
   uint8_t midi_vs_pulse = digitalReadFast(midi_mode_switch);
   uint8_t sub_setting = digitalReadFast(pulse_mode_switch);
 
-  if ((midi_vs_pulse == 1))
-  {
-    if (sub_setting == 0)
-    {
-      system_mode = SM_MIDI_USB;
-    }
-    else
-    {
-      system_mode = SM_MIDI_JACK;
-    }
-  }
-  else
-  {
-    if (sub_setting == 0)
-    {
-      system_mode = SM_FREQ_FIXED;
-    }
-    else
-    {
-      system_mode = SM_FREQ_PINK;
-    }
-  }
+
+  system_mode = SM_MIDI_JACK;
+  // TODO: meawoppl
+  // if ((midi_vs_pulse == 1))
+  // {
+  //   if (sub_setting == 0)
+  //   {
+  //     system_mode = SM_MIDI_USB;
+  //   }
+  //   else
+  //   {
+  //     system_mode = SM_MIDI_JACK;
+  //   }
+  // }
+  // else
+  // {
+  //   if (sub_setting == 0)
+  //   {
+  //     system_mode = SM_FREQ_FIXED;
+  //   }
+  //   else
+  //   {
+  //     system_mode = SM_FREQ_PINK;
+  //   }
+  // }
 };
 
 byte clamp_pitch(byte pitch)
