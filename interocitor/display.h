@@ -12,9 +12,9 @@ void init_serlcd(){
     return;
   }
   
-  Serial1.setTX(1);
-  Serial1.begin(9600);
-  lcd.begin(Serial1); //Set up the LCD for Serial communication at 9600bps
+  Serial2.setTX(10);
+  Serial2.begin(9600);
+  lcd.begin(Serial2); //Set up the LCD for Serial communication at 9600bps
   lcd.disableSystemMessages();
 
   lcd.setBacklight(255, 255, 255); //Set backlight to bright white
@@ -24,6 +24,11 @@ void init_serlcd(){
   delay(10);
 
   _lcd_init = true;
+}
+
+void clear_lcd(){
+  lcd.clear();
+  lcd.setCursor(0, 0);
 }
 
 
